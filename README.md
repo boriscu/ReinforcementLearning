@@ -1,4 +1,4 @@
-# Pravila za Repozitorijum - Samoobučavajući i Adaptivni Algoritmi
+# Pravila i Workflow za Repozitorijum
 
 ## Opšta Pravila
 
