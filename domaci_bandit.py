@@ -160,6 +160,59 @@ def drugi_zadatak():
 
 
 # Treci deo, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
+def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
+    bandits = [Bandit(10*(random.random()-0.5), 5*random.random()) for _ in range(bandits_no)]
+    env = BanditsEnvironment(bandits)
+
+    q = [100 for _ in range(bandits_no)]
+    rewards = []
+
+    for t in trange(attempts_no):
+        if t == 4000:
+            # Prikaz stanja nakon 4000 iteracija
+            plt.figure(figsize=(14, 3))
+            plt.subplot(1, 3, 1)
+            plt.scatter(range(len(q)), q, marker=".")
+            plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
+            plt.title("Prvih 4000 iteracija")
+
+            print("Ukupno odstupanje procenjene srednje vrednosti od realne, posle 4000 iteracija: ", loss_function(q, env.bandits))
+
+            # Kreiranje novih (m, s)
+            bandits = [Bandit(10*(random.random()-0.5), 5*random.random()) for _ in range(bandits_no)]
+            env = BanditsEnvironment(bandits)
+
+        a = choose_eps_greedy_action(q, epsilon)
+        r = env.take_action(a)
+        q[a] = q[a] + alpha * (r - q[a])
+
+        rewards.append(r)
+
+    # Prikaz stanja nakon izmene (m, s) 
+    plt.subplot(1, 3, 2)
+    plt.scatter(range(len(q)), q, marker=".")
+    plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
+    plt.title("Na kraju")
+
+    print("Ukupno odstupanje procenjene srednje vrednosti od realne, na kraju: ", loss_function(q, env.bandits))
+
+    # Pracenje nagrada kroz vreme
+    plt.subplot(1,3,3)
+    g = np.cumsum(rewards)
+    plt.plot(g)
+    plt.title("Nagrade tokom treninga")
+    plt.show()
+
+
+def loss_function(q, envi):
+    loss = 0
+    m = [b.mean for b in envi]
+    for a in (range(len(q))):
+        loss += abs(q[a]-m[a])
+    return loss
+
+train_3a()
+
 
 # Treci deo, pod b) - smisliti algoritam za nasumicnu promenu srednje vrednosti i spana, posle nekog vremena
 
