@@ -34,18 +34,6 @@ class Bandit:
         )  # random number in [mean-span, mean+span]
 
 
-test_mean = 1.0
-test_span = 3.0
-test_len = 1000
-
-test_bandit = Bandit(test_mean, test_span)
-test_rewards = [test_bandit.pull_leaver() for _ in range(test_len)]
-
-plt.plot(test_rewards, label="rewards")
-plt.plot((test_mean + test_span) * np.ones(test_len), linestyle="--", color="r")
-plt.plot((test_mean - test_span) * np.ones(test_len), linestyle="--", color="r")
-
-
 class BanditsEnvironment:
     """An environment consisting of multiple bandits."""
 
@@ -75,48 +63,8 @@ class BanditsEnvironment:
             return self.bandits[a].pull_leaver()
 
 
-test_env_size = 5
-test_bandits = [Bandit(i**2, i) for i in range(test_env_size)]
-test_env = BanditsEnvironment(test_bandits)
-
-
-selected_bandit = 3
-test_rewards = [test_env.take_action(selected_bandit) for _ in range(test_len)]
-
-plt.plot(test_rewards, label="rewards")
-plt.plot(
-    (selected_bandit**2 + selected_bandit) * np.ones(test_len),
-    linestyle="--",
-    color="r",
-)
-plt.plot(
-    (selected_bandit**2 - selected_bandit) * np.ones(test_len),
-    linestyle="--",
-    color="r",
-)
-
-selected_bandit = -1
-test_rewards = [test_env.take_action(selected_bandit) for _ in range(test_len)]
-
-plt.plot(test_rewards, label="rewards")
-
-
-test_rewards = [test_env.take_action(random.randint(0, 4)) for _ in range(test_len)]
-test_mean = sum(test_rewards) / test_len
-
-print("TEST MEAN = ", test_mean)
-
-
 def choose_greedy_action(q):
     return np.argmax(q)
-
-
-test_q = [1, 2, 3, 2, 1]
-
-test_actions = [choose_greedy_action(test_q) for _ in range(test_len)]
-
-plt.plot(test_actions)
-
 
 def choose_random_action(n):
     return random.randint(0, n - 1)
@@ -129,39 +77,75 @@ def choose_eps_greedy_action(q, eps):
         return choose_random_action(len(q))
 
 
-plt.subplot(3, 1, 1)
-plt.plot([choose_eps_greedy_action(test_q, 1.0) for _ in range(test_len)])
-plt.subplot(3, 1, 2)
-plt.plot([choose_eps_greedy_action(test_q, 0.2) for _ in range(test_len)])
-plt.subplot(3, 1, 3)
-plt.plot([choose_eps_greedy_action(test_q, 0.01) for _ in range(test_len)])
+def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
+    bandits = [
+        Bandit(10 * (random.random() - 0.5), 5 * random.random())
+        for _ in range(bandits_no)
+    ]
+    env = BanditsEnvironment(bandits)
+
+    q = [100 for _ in range(bandits_no)]
+    rewards = []
+
+    for t in trange(attempts_no):
+        a = choose_eps_greedy_action(q, epsilon)
+        r = env.take_action(a)
+        q[a] = q[a] + alpha * (r - q[a])
+
+        rewards.append(r)
+
+    if plotting:
+        plt.scatter(range(len(q)), q, marker=".")
+        plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
+
+    return env.bandits, rewards, q
 
 
-BANDITS_NO = 5
-ATTEMPTS_NO = 5000
-ALPHA = 0.1
-EPSILON = 0.1
+# Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
+def prvi_zadatak():
+    plt.figure(figsize=(14, 3))
+    for i in range(3):
+        envi, rew, q1 = train(epsilon=10**(-i-1), plotting=False)
+        plot_e(3, i+1, envi, rew)
+        plt.title(10**(-i-1))
 
-bandits = [
-    Bandit(10 * (random.random() - 0.5), 5 * random.random()) for _ in range(BANDITS_NO)
-]
-env = BanditsEnvironment(bandits)
+    plt.show()
 
-q = [100 for _ in range(BANDITS_NO)]
-rewards = []
-for t in trange(ATTEMPTS_NO):
-    a = choose_eps_greedy_action(q, EPSILON)
-    r = env.take_action(a)
-    q[a] = q[a] + ALPHA * (r - q[a])
+def plot_e(n, i, envi, rew):
+    plt.subplot(1, n, i)
+    g = np.cumsum(rew)
+    max_r = max([b.mean for b in envi])
+    plt.plot(g, "r")
+    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")  
 
-    # just for logging
-    rewards.append(r)
+# Zakljucak prvog zadatka jeste da bismo najbolje prosli (dobili najvecu kumulativnu nagradu) da smo koristili greedy politiku sve vreme.
+# Prilikom smanjenja vrednosti epsilona, cesce je birana masina sa najvecom srednjom vrednosti (samim tim i veca nagarda) te je nagib
+# krive kumulativne nagrade rastao.
 
 
-plt.scatter(range(len(q)), q, marker=".")
-plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
+# Zadatak 2 : Sa naucenim q i epsilon = 0, pustiti 100 iteracija
+def drugi_zadatak():
+    plt.figure(figsize=(8, 3))
 
-g = np.cumsum(rewards)
-max_r = max([b.mean for b in env.bandits])
-plt.plot(g)
-plt.plot(np.cumsum(max_r * np.ones(len(g))))
+    envi, rew, q1 = train(plotting=False)
+    plot_e(2, 1, envi, rew)
+    plt.title("5000 iteracija")
+
+    plt.subplot(1, 2, 2)
+    test_len = 100
+    reward_q1 = [max(q1) for _ in range(test_len)]  # Uvek ce biti ista nagrada
+
+    g1 = np.concatenate((rew, reward_q1))
+    plot_e(2, 2, envi, g1)
+    plt.title("5100 iteracija")
+    plt.show()
+
+
+# Zadatak 3, pod a) : nakon 4000 iteracija napraviti promenu srednje vrednosti i spanova bandita. Prikazati rezultate.
+
+# Zadatak 3, pod b) : smisliti algoritam za nasumicnu promenu srednje vrednosti i spanova bandita, posle nekog vremena. Prikazati rezultate.
+
+
+prvi_zadatak()
+drugi_zadatak()
+
