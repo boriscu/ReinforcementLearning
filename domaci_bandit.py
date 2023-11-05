@@ -101,62 +101,45 @@ def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True)
     return env.bandits, rewards, q
 
 
-# Zadatak 1 : razlicite vrednosti epsilon, prikaz + zakljucak
+# Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
 def prvi_zadatak():
     plt.figure(figsize=(14, 3))
+    for i in range(3):
+        envi, rew, q1 = train(epsilon=10**(-i-1), plotting=False)
+        plot_e(3, i+1, envi, rew)
+        plt.title(10**(-i-1))
 
-    plt.subplot(1, 3, 1)
-    envi, rew, q1 = train(epsilon=0.1, plotting=False)
-    g = np.cumsum(rew)
-    max_r = max([b.mean for b in envi])
-    plt.plot(g, "r")
-    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")
-    plt.title("Epsilon = 0.1")
-
-    plt.subplot(1, 3, 2)
-    envi, rew, q1 = train(epsilon=0.01, plotting=False)
-    g = np.cumsum(rew)
-    max_r = max([b.mean for b in envi])
-    plt.plot(g, "r")
-    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")
-    plt.title("Epsilon = 0.01")
-
-    plt.subplot(1, 3, 3)
-    envi, rew, q1 = train(epsilon=0.001, plotting=False)
-    g = np.cumsum(rew)
-    max_r = max([b.mean for b in envi])
-    plt.plot(g, "r")
-    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")
-    plt.title("Epsilon = 0.001")
     plt.show()
 
+def plot_e(n, i, envi, rew):
+    plt.subplot(1, n, i)
+    g = np.cumsum(rew)
+    max_r = max([b.mean for b in envi])
+    plt.plot(g, "r")
+    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")  
 
 # Zakljucak prvog zadatka jeste da bismo najbolje prosli (dobili najvecu kumulativnu nagradu) da smo koristili greedy politiku sve vreme.
+# Prilikom smanjenja vrednosti epsilona, cesce je birana masina sa najvecom srednjom vrednosti (samim tim i veca nagarda) te je nagib
+# krive kumulativne nagrade rastao.
 
 
 # Zadatak 2 : Sa naucenim q i epsilon = 0, pustiti 100 iteracija
 def drugi_zadatak():
     plt.figure(figsize=(8, 3))
-    plt.subplot(1, 2, 1)
 
     envi, rew, q1 = train(plotting=False)
-    g = np.cumsum(rew)
-    max_r = max([b.mean for b in envi])
-    plt.plot(g, "r")
-    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")
+    plot_e(2, 1, envi, rew)
     plt.title("5000 iteracija")
 
     plt.subplot(1, 2, 2)
-
     test_len = 100
     reward_q1 = [max(q1) for _ in range(test_len)]  # Uvek ce biti ista nagrada
 
     g1 = np.concatenate((rew, reward_q1))
-    g = np.cumsum(g1)
-    plt.plot(g, "r")
-    plt.plot(np.cumsum(max_r * np.ones(len(g))), "b")
+    plot_e(2, 2, envi, g1)
     plt.title("5100 iteracija")
     plt.show()
+
 
 
 # Treci deo, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
@@ -213,8 +196,6 @@ def loss_function(q, envi):
 
 train_3a()
 
-
-# Treci deo, pod b) - smisliti algoritam za nasumicnu promenu srednje vrednosti i spana, posle nekog vremena
 
 
 prvi_zadatak()
