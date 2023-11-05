@@ -104,14 +104,10 @@ def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True)
 # Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
 def prvi_zadatak():
     plt.figure(figsize=(14, 3))
-    envi, rew, q1 = train(epsilon=0.1, plotting=False)
-    plot_e(3, 1, envi, rew)
-
-    envi, rew, q1 = train(epsilon=0.01, plotting=False)
-    plot_e(3, 2, envi, rew)
-
-    envi, rew, q1 = train(epsilon=0.001, plotting=False)
-    plot_e(3, 3, envi, rew)
+    for i in range(3):
+        envi, rew, q1 = train(epsilon=10**(-i-1), plotting=False)
+        plot_e(3, i+1, envi, rew)
+        plt.title(10**(-i-1))
 
     plt.show()
 
@@ -130,7 +126,6 @@ def plot_e(n, i, envi, rew):
 # Zadatak 2 : Sa naucenim q i epsilon = 0, pustiti 100 iteracija
 def drugi_zadatak():
     plt.figure(figsize=(8, 3))
-    # plt.subplot(1, 2, 1)
 
     envi, rew, q1 = train(plotting=False)
     plot_e(2, 1, envi, rew)
