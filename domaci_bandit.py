@@ -33,22 +33,6 @@ class Bandit:
             random.random() - 0.5
         )  # random number in [mean-span, mean+span]
 
-    def update_parameters(self, mean_shift: float, span_shift: float):
-        """Updates the mean and span of the bandit's distribution with constraints.
-
-        Args:
-            mean_shift (float): Amount to shift the mean.
-            span_shift (float): Amount to shift the span.
-            min_span (float): Minimum allowed span.
-            max_span (float, optional): Maximum allowed span. If None, no max limit is applied.
-        """
-        # Update mean and span
-        self.mean += mean_shift
-        self.span += span_shift
-
-        self.mean = max(self.mean, 0)
-        self.span = max(self.span, 0)
-
 
 class BanditsEnvironment:
     """An environment consisting of multiple bandits."""
