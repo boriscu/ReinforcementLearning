@@ -109,6 +109,7 @@ def time_change_train(
     epsilon=0.1,
     mean_shift_interval=100,
     span_shift_interval=200,
+    shift_probability=0.5,
     mean_shift_amount=1.5,
     span_shift_amount=1.5,
     shift_increment=4,
@@ -142,13 +143,13 @@ def time_change_train(
             actual_best_bandit.append(max(bandit.mean for bandit in env.bandits))
             estimated_best_bandit.append(env.bandits[np.argmax(q)].mean)
 
-            if t % mean_shift_interval == 0:
+            if t % mean_shift_interval == 0 and shift_probability > random.random():
                 for bandit in env.bandits:
                     mean_shift = mean_shift_amount * (random.random() - 0.5) * 2
                     bandit.mean += mean_shift
                     mean_shifts.append(t)
 
-            if t % span_shift_interval == 0:
+            if t % span_shift_interval == 0 and shift_probability > random.random():
                 for bandit in env.bandits:
                     span_shift = span_shift_amount * random.random()
                     bandit.span += span_shift
