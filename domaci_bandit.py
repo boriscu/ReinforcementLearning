@@ -107,7 +107,7 @@ def prvi_zadatak():
     plt.figure(figsize=(14, 3))
     for i in range(3):
         envi, rew, q1 = train(epsilon=10 ** (-i - 1), plotting=False)
-        plot_e(3, i + 1, envi, rew)
+        plot_e(3, i + 1, envi.bandits, rew)
         plt.title(10 ** (-i - 1))
 
     plt.show()
@@ -199,6 +199,11 @@ def drugi_zadatak(plotting=False):
         plt.ylabel("Nagrada")
         plt.title("Nagrada na 10 epoha za poslednjih 100 ε-Greedy i 100 Greedy")
         plt.legend()
+        plt.show()
+
+        envi, rew, q1 = train(plotting=False)
+        plot_e(2, 1, envi.bandits, rew)
+        plt.title("5000 iteracija")
         plt.show()
 
 
