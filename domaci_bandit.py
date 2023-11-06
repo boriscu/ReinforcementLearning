@@ -99,7 +99,7 @@ def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True)
         plt.scatter(range(len(q)), q, marker=".")
         plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
 
-    return env.bandits, rewards, q
+    return env, rewards, q
 
 
 # Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
@@ -107,7 +107,8 @@ def prvi_zadatak():
     plt.figure(figsize=(14, 3))
     for i in range(3):
         envi, rew, q1 = train(epsilon=10 ** (-i - 1), plotting=False)
-        plot_e(3, i + 1, envi, rew)
+
+        plot_e(3, i + 1, envi.bandits, rew)
         plt.title(10 ** (-i - 1))
 
     plt.show()
@@ -127,24 +128,82 @@ def plot_e(n, i, envi, rew):
 
 
 # Zadatak 2 : Sa naucenim q i epsilon = 0, pustiti 100 iteracija
-def drugi_zadatak():
-    plt.figure(figsize=(8, 3))
+def drugi_zadatak(plotting=False):
+    env, rewards, q = train(plotting=False)
+    learned_q = q.copy()
 
-    envi, rew, q1 = train(plotting=False)
-    plot_e(2, 1, envi, rew)
-    plt.title("5000 iteracija")
+    # 100 iteracija sa epsilon = 0 (greedy metoda)
+    greedy_rewards = []
+    for _ in range(100):
+        a = choose_greedy_action(learned_q)
+        r = env.take_action(a)
+        greedy_rewards.append(r)
 
-    plt.subplot(1, 2, 2)
-    test_len = 100
-    reward_q1 = [max(q1) for _ in range(test_len)]  # Uvek ce biti ista nagrada
+    avg_rewards_eps_greedy = np.mean(rewards)
+    avg_rewards_greedy = np.mean(greedy_rewards)
+    print(f"Max Q naučena vrednost: {max(learned_q):.2f}")
+    print("Prosečna nagrada - ε-Greedy Politika:", avg_rewards_eps_greedy)
+    print("Prosečna nagrada - Čista Greedy Politika:", avg_rewards_greedy)
+    if plotting:
+        last_100_eps_greedy_rewards = rewards[-100:]
 
-    g1 = np.concatenate((rew, reward_q1))
-    plot_e(2, 2, envi, g1)
-    plt.title("5100 iteracija")
-    plt.show()
+        cumulative_rewards_eps_greedy = np.cumsum(last_100_eps_greedy_rewards)
+        cumulative_rewards_greedy = np.cumsum(greedy_rewards)
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(
+            cumulative_rewards_eps_greedy,
+            label="Kumulativne Nagrade - Poslednjih 100 ε-Greedy",
+        )
+        plt.plot(
+            cumulative_rewards_greedy,
+            label="Kumulativne Nagrade - Greedy",
+            linestyle="--",
+        )
+
+        plt.xlabel("Epoha")
+        plt.ylabel("Kumulativna Nagrada")
+        plt.title("Poredjenje Kumulativnih Nagrada: ε-Greedy vs Greedy")
+        plt.legend()
+        plt.show()
+
+        # Poredjenje na poslednjih 10 nagrada
+        max_mean_reward = max(bandit.mean for bandit in env.bandits)
+        eps_greedy_every_10 = last_100_eps_greedy_rewards[::10]
+        greedy_every_10 = greedy_rewards[::10]
+
+        epochs = range(len(rewards) - 100, len(rewards), 10)
+        plt.scatter(
+            epochs,
+            eps_greedy_every_10,
+            label="ε-Greedy Nagrade (svaka 10ta)",
+            marker="o",
+            alpha=0.7,
+        )
+
+        plt.scatter(
+            epochs,
+            greedy_every_10,
+            label="Greedy Nagrade (svaka 10ta)",
+            marker="x",
+            alpha=0.7,
+        )
+
+        plt.axhline(
+            y=max_mean_reward,
+            color="r",
+            linestyle="--",
+            label="Max Mean Moguća Nagrada",
+        )
+
+        plt.xlabel("Epoha")
+        plt.ylabel("Nagrada")
+        plt.title("Nagrada na 10 epoha za poslednjih 100 ε-Greedy i 100 Greedy")
+        plt.legend()
+        plt.show()
 
 
-# Treci deo, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
+# Zadatak 3, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
 def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
     bandits = [
         Bandit(10 * (random.random() - 0.5), 5 * random.random())
@@ -165,7 +224,7 @@ def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=Tr
             plt.title("Prvih 4000 iteracija")
 
             print(
-                "Ukupno odstupanje procenjene srednje vrednosti od realne, posle 4000 iteracija: ",
+                "\nUkupno odstupanje procenjene srednje vrednosti od realne, posle 4000 iteracija: ",
                 loss_function(q, env.bandits),
             )
 
@@ -176,10 +235,52 @@ def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=Tr
             ]
             env = BanditsEnvironment(bandits)
 
+        a = choose_eps_greedy_action(q, epsilon)
+        r = env.take_action(a)
+        q[a] = q[a] + alpha * (r - q[a])
+
+        rewards.append(r)
+
+    if plotting:
+        # Prikaz stanja nakon izmene (m, s)
+        plt.subplot(1, 3, 2)
+        plt.scatter(range(len(q)), q, marker=".")
+        plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
+        plt.title("Na kraju")
+
+        print(
+            "\nUkupno odstupanje procenjene srednje vrednosti od realne, na kraju: ",
+            loss_function(q, env.bandits),
+        )
+
+        # Pracenje nagrada kroz vreme
+        plt.subplot(1, 3, 3)
+        g = np.cumsum(rewards)
+        plt.plot(g)
+        plt.title("Nagrade tokom treninga")
+        plt.show()
+
+        plt.figure(figsize=(8, 3))
+        plt.subplot(1, 2, 1)
+        plt.plot(g[:1000], label="Prvih 1000 iteracija")
+        plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(g[-1500:], label="Poslednjih 1500 iteracija")
+        plt.xticks([0, 750, 1500], [3500, 4250, 5000])
+        plt.legend()
+
+        plt.show()
+
+
+def loss_function(q, envi):
+    loss = 0
+    m = [b.mean for b in envi]
+    for a in range(len(q)):
+        loss += abs(q[a] - m[a])
+    return loss
+
 
 # Zadatak 4 : Uzeti 5 bandita i prikazati kako se njihove procenjene srednje vrednosti priblizavaju realnim tokom iteacija
-
-
 def cetvrti_zadatak(attempts_no=5000, epsilon=0.1, alpha=0.1):
     bandits = [
         Bandit(10 * (random.random() - 0.5), 5 * random.random()) for _ in range(5)
@@ -231,46 +332,6 @@ def plot_mean(b_mean, b, indeks):
 
 
 prvi_zadatak()
-drugi_zadatak()
-cetvrti_zadatak()
-
-    if plotting:
-        # Prikaz stanja nakon izmene (m, s)
-        plt.subplot(1, 3, 2)
-        plt.scatter(range(len(q)), q, marker=".")
-        plt.scatter(range(len(q)), [b.mean for b in env.bandits], marker="x")
-        plt.title("Na kraju")
-
-        print(
-            "Ukupno odstupanje procenjene srednje vrednosti od realne, na kraju: ",
-            loss_function(q, env.bandits),
-        )
-
-        # Pracenje nagrada kroz vreme
-        plt.subplot(1, 3, 3)
-        g = np.cumsum(rewards)
-        plt.plot(g)
-        plt.title("Nagrade tokom treninga")
-        plt.show()
-
-        plt.figure(figsize=(8, 3))
-        plt.subplot(1, 2, 1)
-        plt.plot(g[:1000], label="Prvih 1000 iteracija")
-        plt.legend()
-        plt.subplot(1, 2, 2)
-        plt.plot(g[-1500:], label="Poslednjih 1500 iteracija")
-        plt.xticks([0, 750, 1500], [3500, 4250, 5000])
-        plt.legend()
-
-        plt.show()
-
-
-def loss_function(q, envi):
-    loss = 0
-    m = [b.mean for b in envi]
-    for a in range(len(q)):
-        loss += abs(q[a] - m[a])
-    return loss
-
-
+drugi_zadatak(plotting=True)
 train_3a(plotting=True)
+cetvrti_zadatak()
