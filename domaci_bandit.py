@@ -223,6 +223,18 @@ def time_change_train(
         plt.show()
 
 
+# Zakljucak Treceg zadatak
+# Povećanje pomeraja srednjih vrednosti i raspona čini da je algoritmu teže da prati optimalne nagrade.
+# To je posebno izraženo u kasnijim iteracijama,
+# što ukazuje na to da algoritam ima poteškoće u prilagođavanju kada se promene događaju češće ili su značajnije.
+# Sa povećanjem pomeraja, algoritam češće greši u identifikaciji stvarno najboljeg bandita.
+# To može biti posledica toga što algoritam teži da više veruje procenama zasnovanim na prethodnim iskustvima,
+# koje postaju manje pouzdane kako se promene nagrada bandita čine češće.
+# Uprkos izazovima u praćenju najboljeg bandita,
+# algoritam ipak pokazuje sposobnost da identifikuje novog najboljeg bandita nakon promena.
+# Vreme potrebno algoritmu da pronađe novog najboljeg bandita može biti pokazatelj njegove efikasnosti u učenju i adaptaciji.
+
+
 # Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
 def prvi_zadatak():
     plt.figure(figsize=(14, 3))
