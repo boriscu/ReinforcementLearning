@@ -239,11 +239,63 @@ def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=Tr
                 for _ in range(bandits_no)
             ]
             env = BanditsEnvironment(bandits)
+
+# Zadatak 4 : Uzeti 5 bandita i prikazati kako se njihove procenjene srednje vrednosti priblizavaju realnim tokom iteacija
+
+
+def cetvrti_zadatak(attempts_no=5000, epsilon=0.1, alpha=0.1):
+    bandits = [
+        Bandit(10 * (random.random() - 0.5), 5 * random.random()) for _ in range(5)
+    ]
+    env = BanditsEnvironment(bandits)
+
+    b1_mean = bandits[0].mean
+    b2_mean = bandits[1].mean
+    b3_mean = bandits[2].mean
+    b4_mean = bandits[3].mean
+    b5_mean = bandits[4].mean
+
+    q = [100 for _ in range(5)]
+    rewards = []
+    b1 = []
+    b2 = []
+    b3 = []
+    b4 = []
+    b5 = []
+
+    for t in trange(attempts_no):
         a = choose_eps_greedy_action(q, epsilon)
         r = env.take_action(a)
         q[a] = q[a] + alpha * (r - q[a])
 
         rewards.append(r)
+        b1.append(q[0])
+        b2.append(q[1])
+        b3.append(q[2])
+        b4.append(q[3])
+        b5.append(q[4])
+
+    plt.figure(figsize=(13, 8))
+
+    plot_mean(b1_mean, b1, 1)
+    plot_mean(b2_mean, b2, 2)
+    plot_mean(b3_mean, b3, 3)
+    plot_mean(b4_mean, b4, 4)
+    plot_mean(b5_mean, b5, 5)
+
+    plt.show()
+
+
+def plot_mean(b_mean, b, indeks):
+    plt.subplot(2, 3, indeks)
+    plt.axhline(y=b_mean, color="r", linestyle="--", label=b_mean)
+    plt.plot(b, "b")
+    plt.legend()
+
+
+prvi_zadatak()
+drugi_zadatak()
+cetvrti_zadatak()
 
     if plotting:
         # Prikaz stanja nakon izmene (m, s)
