@@ -102,143 +102,11 @@ def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True)
     return env, rewards, q
 
 
-def time_change_train(
-    bandits_no=5,
-    attempts_no=5000,
-    alpha=0.1,
-    epsilon=0.1,
-    mean_shift_interval=100,
-    span_shift_interval=200,
-    shift_probability=0.5,
-    mean_shift_amount=1.5,
-    span_shift_amount=1.5,
-    shift_increment=4,
-    num_runs=3,
-    plotting=False,
-):
-    fig, axes = plt.subplots(
-        2, num_runs, figsize=(5 * num_runs, 10), sharex="col", squeeze=False
-    )
-
-    for run in range(num_runs):
-        bandits = [
-            Bandit(10 * (random.random() - 0.5), 5 * random.random())
-            for _ in range(bandits_no)
-        ]
-        env = BanditsEnvironment(bandits)
-
-        q = [0 for _ in range(bandits_no)]
-        rewards = []
-        optimal_means = []
-        actual_best_bandit = []
-        estimated_best_bandit = []
-        mean_shifts = []
-        span_shifts = []
-
-        for t in trange(
-            attempts_no,
-            desc=f"Run {run+1} with shifts {mean_shift_amount}, {span_shift_amount}",
-        ):
-            optimal_means.append(max(bandit.mean for bandit in env.bandits))
-            actual_best_bandit.append(max(bandit.mean for bandit in env.bandits))
-            estimated_best_bandit.append(env.bandits[np.argmax(q)].mean)
-
-            if t % mean_shift_interval == 0 and shift_probability > random.random():
-                for bandit in env.bandits:
-                    mean_shift = mean_shift_amount * (random.random() - 0.5) * 2
-                    bandit.mean += mean_shift
-                    mean_shifts.append(t)
-
-            if t % span_shift_interval == 0 and shift_probability > random.random():
-                for bandit in env.bandits:
-                    span_shift = span_shift_amount * random.random()
-                    bandit.span += span_shift
-                    span_shifts.append(t)
-
-            a = choose_eps_greedy_action(q, epsilon)
-            r = env.take_action(a)
-            q[a] = q[a] + alpha * (r - q[a])
-
-            rewards.append(r)
-
-        # Plot cumulative rewards in the first row
-        cumsum_ax = axes[0, run]
-        cumsum_ax.plot(np.cumsum(rewards), label="Kumulativne Nagrade")
-        cumsum_ax.plot(
-            np.cumsum(optimal_means),
-            label="Optimalne Kumulativne Nagrade",
-            linestyle="--",
-            alpha=0.75,
-        )
-        cumsum_ax.set_title(
-            f"Pomeraji: Mean {mean_shift_amount}, Span {span_shift_amount}"
-        )
-        cumsum_ax.legend()
-
-        # Plot actual vs estimated best bandit in the second row
-        best_bandit_ax = axes[1, run]
-        best_bandit_ax.plot(
-            actual_best_bandit,
-            label="Stvarni Najbolji Bandit",
-            linestyle="-",
-            alpha=0.5,
-        )
-        best_bandit_ax.plot(
-            estimated_best_bandit,
-            label="Procenjeni Najbolji Bandit",
-            linestyle="--",
-            alpha=0.5,
-        )
-
-        best_bandit_ax.scatter(
-            mean_shifts,
-            [actual_best_bandit[i] for i in mean_shifts],
-            color="green",
-            zorder=5,
-            label="Mean Pomeraj",
-            s=10,
-        )
-        best_bandit_ax.scatter(
-            span_shifts,
-            [actual_best_bandit[i] for i in span_shifts],
-            color="red",
-            zorder=5,
-            label="Span Pomeraj",
-            s=10,
-        )
-
-        best_bandit_ax.set_xlabel("Pokusaj")
-
-        best_bandit_ax.legend()
-
-        if run == 0:
-            cumsum_ax.set_ylabel("Kumulativna Nagrada")
-            best_bandit_ax.set_ylabel("Bandit Mean")
-
-        mean_shift_amount += shift_increment
-        span_shift_amount += shift_increment
-
-    plt.tight_layout()
-    if plotting:
-        plt.show()
-
-
-# Zakljucak Treceg zadatak
-# Povećanje pomeraja srednjih vrednosti i raspona čini da je algoritmu teže da prati optimalne nagrade.
-# To je posebno izraženo u kasnijim iteracijama,
-# što ukazuje na to da algoritam ima poteškoće u prilagođavanju kada se promene događaju češće ili su značajnije.
-# Sa povećanjem pomeraja, algoritam češće greši u identifikaciji stvarno najboljeg bandita.
-# To može biti posledica toga što algoritam teži da više veruje procenama zasnovanim na prethodnim iskustvima,
-# koje postaju manje pouzdane kako se promene nagrada bandita čine češće.
-# Uprkos izazovima u praćenju najboljeg bandita,
-# algoritam ipak pokazuje sposobnost da identifikuje novog najboljeg bandita nakon promena.
-# Vreme potrebno algoritmu da pronađe novog najboljeg bandita može biti pokazatelj njegove efikasnosti u učenju i adaptaciji.
-
-
 # Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
 def prvi_zadatak():
     plt.figure(figsize=(14, 3))
     for i in range(3):
+        # 0.1, 0.001, 0.0001
         envi, rew, q1 = train(epsilon=10 ** (-i - 1), plotting=False)
 
         plot_e(3, i + 1, envi.bandits, rew)
@@ -337,7 +205,7 @@ def drugi_zadatak(plotting=False):
 
 
 # Zadatak 3, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
-def train_3a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
+def treci_zadatak_a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
     bandits = [
         Bandit(10 * (random.random() - 0.5), 5 * random.random())
         for _ in range(bandits_no)
@@ -412,6 +280,127 @@ def loss_function(q, envi):
     return loss
 
 
+def time_change_train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, mean_shift_interval=100,
+    span_shift_interval=200, shift_probability=0.5, mean_shift_amount=1.5,  span_shift_amount=1.5,
+    shift_increment=4, num_runs=3, plotting=False):
+
+    fig, axes = plt.subplots(
+        2, num_runs, figsize=(5 * num_runs, 10), sharex="col", squeeze=False
+    )
+
+    for run in range(num_runs):
+        bandits = [
+            Bandit(10 * (random.random() - 0.5), 5 * random.random())
+            for _ in range(bandits_no)
+        ]
+        env = BanditsEnvironment(bandits)
+
+        q = [0 for _ in range(bandits_no)]
+        rewards = []
+        optimal_means = []
+        actual_best_bandit = []
+        estimated_best_bandit = []
+        mean_shifts = []
+        span_shifts = []
+
+        for t in trange(attempts_no, desc=f"Run {run+1} with shifts {mean_shift_amount}, {span_shift_amount}"):
+            optimal_means.append(max(bandit.mean for bandit in env.bandits))
+            actual_best_bandit.append(max(bandit.mean for bandit in env.bandits))
+            estimated_best_bandit.append(env.bandits[np.argmax(q)].mean)
+
+            if t % mean_shift_interval == 0 and shift_probability > random.random():
+                for bandit in env.bandits:
+                    mean_shift = mean_shift_amount * (random.random() - 0.5) * 2
+                    bandit.mean += mean_shift
+                    mean_shifts.append(t)
+
+            if t % span_shift_interval == 0 and shift_probability > random.random():
+                for bandit in env.bandits:
+                    span_shift = span_shift_amount * random.random()
+                    bandit.span += span_shift
+                    span_shifts.append(t)
+
+            a = choose_eps_greedy_action(q, epsilon)
+            r = env.take_action(a)
+            q[a] = q[a] + alpha * (r - q[a])
+
+            rewards.append(r)
+
+        # Prikaz kumulativnih nagrada u prvom redu
+        cumsum_ax = axes[0, run]
+        cumsum_ax.plot(np.cumsum(rewards), label="Kumulativne Nagrade")
+        cumsum_ax.plot(
+            np.cumsum(optimal_means),
+            label="Optimalne Kumulativne Nagrade",
+            linestyle="--",
+            alpha=0.75,
+        )
+        cumsum_ax.set_title(
+            f"Pomeraji: Mean {mean_shift_amount}, Span {span_shift_amount}"
+        )
+        cumsum_ax.legend()
+
+        # Prikaz stvarnog naspram procenjenog najboljeg bandita u drugom redu
+        best_bandit_ax = axes[1, run]
+        best_bandit_ax.plot(
+            actual_best_bandit,
+            label="Stvarni Najbolji Bandit",
+            linestyle="-",
+            alpha=0.5,
+        )
+        best_bandit_ax.plot(
+            estimated_best_bandit,
+            label="Procenjeni Najbolji Bandit",
+            linestyle="--",
+            alpha=0.5,
+        )
+
+        best_bandit_ax.scatter(
+            mean_shifts,
+            [actual_best_bandit[i] for i in mean_shifts],
+            color="green",
+            zorder=5,
+            label="Mean Pomeraj",
+            s=10,
+        )
+        best_bandit_ax.scatter(
+            span_shifts,
+            [actual_best_bandit[i] for i in span_shifts],
+            color="red",
+            zorder=5,
+            label="Span Pomeraj",
+            s=10,
+        )
+
+        best_bandit_ax.set_xlabel("Pokusaj")
+
+        best_bandit_ax.legend()
+
+        if run == 0:
+            cumsum_ax.set_ylabel("Kumulativna Nagrada")
+            best_bandit_ax.set_ylabel("Bandit Mean")
+
+        mean_shift_amount += shift_increment
+        span_shift_amount += shift_increment
+
+    plt.tight_layout()
+    if plotting:
+        plt.show()
+
+def treci_zadatak_b(plotting=False):
+    time_change_train(plotting=plotting)
+
+# Zakljucak treceg zadatka
+# Povećanje pomeraja srednjih vrednosti i raspona čini da je algoritmu teže da prati optimalne nagrade.
+# To je posebno izraženo u kasnijim iteracijama,
+# što ukazuje na to da algoritam ima poteškoće u prilagođavanju kada se promene događaju češće ili su značajnije.
+# Sa povećanjem pomeraja, algoritam češće greši u identifikaciji stvarno najboljeg bandita.
+# To može biti posledica toga što algoritam teži da više veruje procenama zasnovanim na prethodnim iskustvima,
+# koje postaju manje pouzdane kako se promene nagrada bandita čine češće.
+# Uprkos izazovima u praćenju najboljeg bandita,
+# algoritam ipak pokazuje sposobnost da identifikuje novog najboljeg bandita nakon promena.
+# Vreme potrebno algoritmu da pronađe novog najboljeg bandita može biti pokazatelj njegove efikasnosti u učenju i adaptaciji.
+
 # Zadatak 4 : Uzeti 5 bandita i prikazati kako se njihove procenjene srednje vrednosti priblizavaju realnim tokom iteacija
 def cetvrti_zadatak(attempts_no=5000, epsilon=0.1, alpha=0.1):
     bandits = [
@@ -465,5 +454,6 @@ def plot_mean(b_mean, b, indeks):
 
 prvi_zadatak()
 drugi_zadatak(plotting=True)
-train_3a(plotting=True)
+treci_zadatak_a(plotting=True)
+treci_zadatak_b(plotting=True)
 cetvrti_zadatak()
