@@ -205,7 +205,9 @@ def drugi_zadatak(plotting=False):
 
 
 # Zadatak 3, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
-def treci_zadatak_a(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True):
+def treci_zadatak_a(
+    bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True
+):
     bandits = [
         Bandit(10 * (random.random() - 0.5), 5 * random.random())
         for _ in range(bandits_no)
@@ -280,10 +282,21 @@ def loss_function(q, envi):
     return loss
 
 
-def time_change_train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, mean_shift_interval=100,
-    span_shift_interval=200, shift_probability=0.5, mean_shift_amount=1.5,  span_shift_amount=1.5,
-    shift_increment=4, num_runs=3, plotting=False):
-
+# Zadatak 3, pod b) - U random iteracijama promena srednjih vrednosti i spanova bandita.
+def time_change_train(
+    bandits_no=5,
+    attempts_no=5000,
+    alpha=0.1,
+    epsilon=0.1,
+    mean_shift_interval=100,
+    span_shift_interval=200,
+    shift_probability=0.5,
+    mean_shift_amount=1.5,
+    span_shift_amount=1.5,
+    shift_increment=4,
+    num_runs=3,
+    plotting=False,
+):
     fig, axes = plt.subplots(
         2, num_runs, figsize=(5 * num_runs, 10), sharex="col", squeeze=False
     )
@@ -303,7 +316,10 @@ def time_change_train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, me
         mean_shifts = []
         span_shifts = []
 
-        for t in trange(attempts_no, desc=f"Run {run+1} with shifts {mean_shift_amount}, {span_shift_amount}"):
+        for t in trange(
+            attempts_no,
+            desc=f"Run {run+1} with shifts {mean_shift_amount}, {span_shift_amount}",
+        ):
             optimal_means.append(max(bandit.mean for bandit in env.bandits))
             actual_best_bandit.append(max(bandit.mean for bandit in env.bandits))
             estimated_best_bandit.append(env.bandits[np.argmax(q)].mean)
@@ -316,7 +332,7 @@ def time_change_train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, me
 
             if t % span_shift_interval == 0 and shift_probability > random.random():
                 for bandit in env.bandits:
-                    span_shift = span_shift_amount * random.random()
+                    span_shift = span_shift_amount * (random.random() - 0.5) * 2
                     bandit.span += span_shift
                     span_shifts.append(t)
 
@@ -387,8 +403,10 @@ def time_change_train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, me
     if plotting:
         plt.show()
 
+
 def treci_zadatak_b(plotting=False):
     time_change_train(plotting=plotting)
+
 
 # Zakljucak treceg zadatka
 # Povećanje pomeraja srednjih vrednosti i raspona čini da je algoritmu teže da prati optimalne nagrade.
@@ -400,6 +418,7 @@ def treci_zadatak_b(plotting=False):
 # Uprkos izazovima u praćenju najboljeg bandita,
 # algoritam ipak pokazuje sposobnost da identifikuje novog najboljeg bandita nakon promena.
 # Vreme potrebno algoritmu da pronađe novog najboljeg bandita može biti pokazatelj njegove efikasnosti u učenju i adaptaciji.
+
 
 # Zadatak 4 : Uzeti 5 bandita i prikazati kako se njihove procenjene srednje vrednosti priblizavaju realnim tokom iteacija
 def cetvrti_zadatak(attempts_no=5000, epsilon=0.1, alpha=0.1):
@@ -430,7 +449,12 @@ def plot_mean(bandits, q_value_history):
     plt.figure(figsize=(13, 8))
     for i in range(5):
         plt.subplot(2, 3, i + 1)
-        plt.axhline(y=bandits[i].mean, color="r", linestyle="--", label=f"Realna Srednja vrednost: {bandits[i].mean:.2f}")
+        plt.axhline(
+            y=bandits[i].mean,
+            color="r",
+            linestyle="--",
+            label=f"Realna Srednja vrednost: {bandits[i].mean:.2f}",
+        )
         plt.plot(q_value_history[:, i], label=f"Procenjena srednja vrednost")
         plt.legend()
         plt.title(f"Bandit {i + 1}")
