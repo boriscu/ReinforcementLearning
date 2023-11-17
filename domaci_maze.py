@@ -5,11 +5,16 @@ from copy import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-from random import random, choices
+from random import random, choices, randint, sample
+import networkx as nx
 
 
 class Cell(ABC):
     """Abstract base class for all maze cells."""
+
+    def __init__(self, row: int, col: int):
+        self.row = row
+        self.col = col
 
     @abstractmethod
     def get_reward(self) -> float:
@@ -44,7 +49,8 @@ class Cell(ABC):
 class RegularCell(Cell):
     """A common, non-terminal, steppable cell."""
 
-    def __init__(self, reward: float):
+    def __init__(self, reward: float, row: int, col: int):
+        super().__init__(row, col)
         self.reward = reward
 
     def get_reward(self) -> float:
@@ -54,7 +60,8 @@ class RegularCell(Cell):
 class TerminalCell(Cell):
     """A terminal cell."""
 
-    def __init__(self, reward: float):
+    def __init__(self, reward: float, row: int, col: int):
+        super().__init__(row, col)
         self.reward = reward
 
     def get_reward(self) -> float:
@@ -69,6 +76,9 @@ class TerminalCell(Cell):
 
 class WallCell(Cell):
     """A non-steppable cell."""
+
+    def __init__(self, row: int, col: int):
+        super().__init__(row, col)
 
     def get_reward(self) -> float:
         return 0
@@ -138,28 +148,15 @@ CellGenerator = Callable[[], Cell]
 def create_random_board(
     size: tuple[int, int], specs=list[tuple[float, CellGenerator]]
 ) -> MazeBoard:
-    """
-    Generate a random cell.
-
-    Args:
-        size (float): Board size: height and width.
-        specs (list[tuple[float, CellGenerator]]):
-            List of tuples, each of which contains a weight factor and a Cell-generating function
-            The weight-factor is proportional to the probability with thich the Cell-generator
-            function will be invoked.
-    """
     h, w = size
     weights = [w for w, _ in specs]
     generators = [g for _, g in specs]
-    # The line below is a bit tricky...
-    # `random_cell` is a function which returns a random cell once it has been invoked.
-    # `choices` function returns a list of elements taken from `generators` with probabilities
-    #    proportional to `weights`. The length of such list is set to 1. Therefore by indexing
-    #    with `[0]` we are actually requiesting for the first and only element of that list.
-    # In this way we obtained one such randomly selected generator.
-    # We need to invoke it with `()` in order to actually get a cell.
-    random_cell = lambda: choices(generators, weights, k=1)[0]()
-    cells = [[random_cell() for i in range(w)] for j in range(h)]
+
+    def random_cell(row, col):  # Updated to include row and col
+        cell_generator = choices(generators, weights, k=1)[0]
+        return cell_generator(row, col)  # Pass row and col
+
+    cells = [[random_cell(i, j) for j in range(w)] for i in range(h)]
     return MazeBoard(cells)
 
 
@@ -197,14 +194,13 @@ def draw_board(
 # regular cells with higher penalty, walls and terminal cells.
 
 DEFAULT_SPECS = [
-    (10, lambda: RegularCell(-1)),
-    (2, lambda: RegularCell(-10)),
-    (2, lambda: WallCell()),
-    (1, lambda: TerminalCell(-1)),
+    (10, lambda row, col: RegularCell(-1, row, col)),
+    (2, lambda row, col: RegularCell(-10, row, col)),
+    (2, lambda row, col: WallCell(row, col)),
+    (1, lambda row, col: TerminalCell(-1, row, col)),
 ]
 
 board = create_random_board(size=(8, 8), specs=DEFAULT_SPECS)
-draw_board(board)
 
 # Let us first enumerate the possible actions for better readability.
 RIGHT = 0
@@ -231,6 +227,44 @@ class MazeEnvironment:
     def __init__(self, board: MazeBoard):
         """Initialize the enviornment by specifying the underlying maze board."""
         self.board = board
+        self.graph = self.initialize_graph()
+
+    def initialize_graph(self):
+        graph = {}
+        for r in range(self.board.rows_no):
+            for c in range(self.board.cols_no):
+                cell = self.board[r, c]
+                graph[cell] = self.get_possible_actions(cell, r, c)
+        return graph
+
+    def get_possible_actions(self, cell, row, col):
+        potential_actions = {}
+
+        if isinstance(cell, WallCell):
+            return {}
+
+        # Check all possible directions and add them if they lead to a steppable cell
+        if row > 0 and self.board[row - 1, col].is_steppable():
+            potential_actions["up"] = (row - 1, col)
+        if row < self.board.rows_no - 1 and self.board[row + 1, col].is_steppable():
+            potential_actions["down"] = (row + 1, col)
+        if col > 0 and self.board[row, col - 1].is_steppable():
+            potential_actions["left"] = (row, col - 1)
+        if col < self.board.cols_no - 1 and self.board[row, col + 1].is_steppable():
+            potential_actions["right"] = (row, col + 1)
+
+        # # Randomly select a subset of these potential actions
+        # num_actions = randint(
+        #     1, len(potential_actions)
+        # )  # At least 1 action, up to the number of potential actions
+        # actions = dict(
+        #     sample(
+        #         list(potential_actions.items()),
+        #         min(num_actions, len(potential_actions)),
+        #     )
+        # )
+
+        return potential_actions
 
     def validate_position(self, row, col):
         """A utility function that validates a position."""
@@ -242,44 +276,14 @@ class MazeEnvironment:
             raise Exception("Invalid position: unsteppable cell.")
         return row, col
 
-    def move_up_from(self, row: int, col: int) -> tuple[int, int]:
-        if row != 0 and self.board[row - 1, col].is_steppable():
-            return row - 1, col
+    def move_from(self, row: int, col: int, action: str) -> tuple[int, int]:
+        if action in self.graph[self.board[row, col]]:
+            return self.graph[self.board[row, col]][action]
         else:
-            return row, col
-
-    def move_down_from(self, row: int, col: int) -> tuple[int, int]:
-        if row != self.board.rows_no - 1 and self.board[row + 1, col].is_steppable():
-            return row + 1, col
-        else:
-            return row, col
-
-    def move_left_from(self, row: int, col: int) -> tuple[int, int]:
-        if col != 0 and self.board[row, col - 1].is_steppable():
-            return row, col - 1
-        else:
-            return row, col
-
-    def move_right_from(self, row: int, col: int) -> tuple[int, int]:
-        if col != self.board.cols_no - 1 and self.board[row, col + 1].is_steppable():
-            return row, col + 1
-        else:
-            return row, col
-
-    def move_from(self, row: int, col: int, action: int) -> tuple[int, int]:
-        if action == RIGHT:
-            return self.move_right_from(row, col)
-        elif action == UP:
-            return self.move_up_from(row, col)
-        elif action == LEFT:
-            return self.move_left_from(row, col)
-        elif action == DOWN:
-            return self.move_down_from(row, col)
-        else:
-            raise Exception("Invalid direction.")
+            raise Exception(f"Invalid action: {action} for cell ({row}, {col}).")
 
     def __call__(
-        self, state: tuple[int, int], action: int
+        self, state: tuple[int, int], action: str
     ) -> tuple[tuple[int, int], float, bool]:
         row, col = state
         new_row, new_col = self.move_from(row, col, action)
@@ -299,134 +303,274 @@ class MazeEnvironment:
     def is_terminal(self, s):
         return self.board[s[0], s[1]].is_terminal()
 
-    def get_actions(self):
-        return [RIGHT, UP, LEFT, DOWN]
+    def get_actions(self, cell):
+        if cell in self.graph:
+            return list(self.graph[cell].keys())
+        else:
+            return []
 
 
-env = MazeEnvironment(board)
+def create_graph(maze_env):
+    G = nx.DiGraph()
+    for cell, actions in maze_env.graph.items():
+        for action, target in actions.items():
+            source = (
+                cell.row,
+                cell.col,
+            )  # assuming each cell has row and col attributes
+            G.add_edge(source, target, action=action)
+    return G
 
 
-def update_state_value(env: MazeEnvironment, s, v, gamma):
-    """Update value of the given state.
-
-    Args:
-        env (MazeEnvironment): The environment to work on.
-        s : The state (cell position).
-        v : Values of other states.
-        gamma : discount factor.
-    """
-    rhs = []
-    for a in env.get_actions():
-        s_new, r, _ = env(s, a)
-        rhs.append(r + gamma * v[s_new])
-    return max(rhs)
+def get_node_color(cell):
+    if isinstance(cell, RegularCell) and cell.get_reward() == -10:
+        return "red"
+    elif isinstance(cell, RegularCell) and cell.get_reward() == -1:
+        return "gray"
+    elif isinstance(cell, WallCell):
+        return "black"
+    elif isinstance(cell, TerminalCell):
+        return "blue"
+    # Add more as needed
 
 
-def async_update_all_values(env: MazeEnvironment, v, gamma):
-    """Update values of all states.
-
-    Args:
-        env (MazeEnvironment): The environment to work on.
-        v : Values of other states.
-        gamma : discount factor.
-    """
-    for s in env.get_states():
-        if not env.is_terminal(s):
-            v[s] = update_state_value(env, s, v, gamma)
-    return copy(v)
-
-
-def init_values(env):
-    """Randomly initialize states of the given environment."""
-    values = {s: -10 * random() for s in env.get_states()}
-
-    for s in values:
-        if env.is_terminal(s):
-            values[s] = 0
-
-    return values
-
-
-def draw_values(env, values, ax=None):
-    ax = ax if ax is not None else plt
-    draw_board(env.board, ax=ax)
-    for s in values:
-        ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
-
-
-values = init_values(env)
-draw_values(env, values)
-
-nrows, ncols = 2, 2
-fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 15))
-axes = axes.flatten()
-values = init_values(env)
-for k, ax in enumerate(axes):
-    draw_values(env, values, ax=ax)
-    ax.set_title(f"it={k}")
-    values = async_update_all_values(env, values, 1.0)
-
-
-def value_iteration(env, gamma, eps, v0=None, maxiter=100):
-    v = v0 if v0 is not None else init_values(env)
-    for k in range(maxiter):
-        nv = async_update_all_values(env, values, gamma)
-        err = max([abs(nv[s] - v[s]) for s in v])
-        if err < eps:
-            return nv, k
-        v = nv
-    return v, k
-
-
-fin_v, k = value_iteration(env, 1.0, 0.01)
-draw_values(env, fin_v)
-plt.title(f"Converged after {k} iterations")
-
-
-def greedy_action(env, s, v, gamma):
-    vs = []
-    for a in env.get_actions():
-        s_next, r, _ = env(s, a)
-        vs.append(r + gamma * v[s_next])
-    return np.argmax(vs)
-
-
-aopt = greedy_action(env, (5, 4), fin_v, 1.0)
-ACTIONS[aopt]
-
-
-def optimal_policy(env, v, gamma):
-    return {
-        s: greedy_action(env, s, v, gamma)
-        for s in env.get_states()
-        if not env.is_terminal(s)
+def plot_maze_graph(G, maze_env, current_position):
+    pos = {
+        (r, c): (c, -r)
+        for r in range(maze_env.board.rows_no)
+        for c in range(maze_env.board.cols_no)
     }
 
+    # Add all cells to the graph as nodes
+    for r in range(maze_env.board.rows_no):
+        for c in range(maze_env.board.cols_no):
+            cell = maze_env.board[r, c]
+            if (r, c) not in G:
+                G.add_node(
+                    (r, c)
+                )  # Add cell as a node if it's not already in the graph
 
-def action_symbol(a):
-    if a == RIGHT:
-        return "→"
-    elif a == UP:
-        return "↑"
-    elif a == LEFT:
-        return "←"
-    elif a == DOWN:
-        return "↓"
-    else:
-        raise "Unknown action"
+    # Create a dictionary for node colors
+    node_colors = {(r, c): get_node_color(maze_env.board[r, c]) for r, c in G.nodes()}
+
+    plt.figure(figsize=(12, 8))
+
+    # Separate nodes based on whether they have actions or not
+    action_nodes = set(u for u, v, d in G.edges(data=True))
+    no_action_nodes = set(G.nodes()) - action_nodes
+
+    # Draw nodes with actions (as circles)
+    nx.draw_networkx_nodes(
+        G,
+        pos,
+        nodelist=action_nodes,
+        node_color=[node_colors[n] for n in action_nodes],
+        node_size=700,
+    )
+
+    # Draw nodes without actions (as squares)
+    nx.draw_networkx_nodes(
+        G,
+        pos,
+        nodelist=no_action_nodes,
+        node_color=[node_colors[n] for n in no_action_nodes],
+        node_size=700,
+        node_shape="s",
+    )
+
+    # Drawing edges
+    nx.draw_networkx_edges(G, pos, edge_color="black", arrows=False)
+
+    current_pos = pos[current_position]
+    plt.text(
+        current_pos[0],
+        current_pos[1],
+        "X",
+        color="black",
+        fontsize=12,
+        ha="center",
+        va="center",
+    )
+
+    plt.show()
 
 
-def draw_policy(env, policy, ax=None):
-    ax = ax if ax is not None else plt
-    draw_board(env.board, ax=ax)
-    for s, a in policy.items():
-        ax.text(s[1] - 0.25, s[0] + 0.1, action_symbol(a))
+def display_available_actions(maze_env, row, col):
+    cell = maze_env.board[row, col]
+    actions = maze_env.get_possible_actions(cell, row, col)
+    print("Available actions:", ", ".join(actions.keys()))
+
+
+# Commented out Rapajas code for logic
+# TODO Make it work with graphs
+
+# env = MazeEnvironment(board)
+
+# def update_state_value(env: MazeEnvironment, s, v, gamma):
+#     """Update value of the given state.
+
+#     Args:
+#         env (MazeEnvironment): The environment to work on.
+#         s : The state (cell position).
+#         v : Values of other states.
+#         gamma : discount factor.
+#     """
+#     rhs = []
+#     for a in env.get_actions():
+#         s_new, r, _ = env(s, a)
+#         rhs.append(r + gamma * v[s_new])
+#     return max(rhs)
+
+
+# def async_update_all_values(env: MazeEnvironment, v, gamma):
+#     """Update values of all states.
+
+#     Args:
+#         env (MazeEnvironment): The environment to work on.
+#         v : Values of other states.
+#         gamma : discount factor.
+#     """
+#     for s in env.get_states():
+#         if not env.is_terminal(s):
+#             v[s] = update_state_value(env, s, v, gamma)
+#     return copy(v)
+
+
+# def init_values(env):
+#     """Randomly initialize states of the given environment."""
+#     values = {s: -10 * random() for s in env.get_states()}
+
+#     for s in values:
+#         if env.is_terminal(s):
+#             values[s] = 0
+
+#     return values
+
+
+# def draw_values(env, values, ax=None):
+#     ax = ax if ax is not None else plt
+#     draw_board(env.board, ax=ax)
+#     for s in values:
+#         ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
+
+# values = init_values(env)
+# draw_values(env, values)
+
+# nrows, ncols = 2, 2
+# fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 15))
+# axes = axes.flatten()
+# values = init_values(env)
+# for k, ax in enumerate(axes):
+#     draw_values(env, values, ax=ax)
+#     ax.set_title(f"it={k}")
+#     values = async_update_all_values(env, values, 1.0)
+
+
+# def value_iteration(env, gamma, eps, v0=None, maxiter=100):
+#     v = v0 if v0 is not None else init_values(env)
+#     for k in range(maxiter):
+#         nv = async_update_all_values(env, values, gamma)
+#         err = max([abs(nv[s] - v[s]) for s in v])
+#         if err < eps:
+#             return nv, k
+#         v = nv
+#     return v, k
+
+
+# fin_v, k = value_iteration(env, 1.0, 0.01)
+# draw_values(env, fin_v)
+# plt.title(f"Converged after {k} iterations")
+
+
+# def greedy_action(env, s, v, gamma):
+#     vs = []
+#     for a in env.get_actions():
+#         s_next, r, _ = env(s, a)
+#         vs.append(r + gamma * v[s_next])
+#     return np.argmax(vs)
+
+
+# aopt = greedy_action(env, (5, 4), fin_v, 1.0)
+# ACTIONS[aopt]
+
+
+# def optimal_policy(env, v, gamma):
+#     return {
+#         s: greedy_action(env, s, v, gamma)
+#         for s in env.get_states()
+#         if not env.is_terminal(s)
+#     }
+
+
+# def action_symbol(a):
+#     if a == RIGHT:
+#         return "→"
+#     elif a == UP:
+#         return "↑"
+#     elif a == LEFT:
+#         return "←"
+#     elif a == DOWN:
+#         return "↓"
+#     else:
+#         raise "Unknown action"
+
+
+# def draw_policy(env, policy, ax=None):
+#     ax = ax if ax is not None else plt
+#     draw_board(env.board, ax=ax)
+#     for s, a in policy.items():
+#         ax.text(s[1] - 0.25, s[0] + 0.1, action_symbol(a))
+
+
+def main():
+    # Initialize your environment and graph
+    env = MazeEnvironment(board)
+    G = create_graph(env)
+
+    # Start position
+    current_position = (0, 0)
+
+    while True:
+        # Plot the graph with the current position
+        plot_maze_graph(G, env, current_position)
+
+        # Check if the current position is terminal
+        if env.is_terminal(current_position):
+            print("Reached a terminal cell. Exiting the game.")
+            break
+
+        # Display available actions
+        display_available_actions(env, *current_position)
+
+        # Get user input for the action
+        action = (
+            input("Enter action (LEFT, RIGHT, UP, DOWN, or 'exit' to quit): ")
+            .strip()
+            .lower()
+        )
+
+        # Check for exit command
+        if action == "exit":
+            print("Exiting the game.")
+            break
+
+        try:
+            # Try to move
+            new_position = env.move_from(*current_position, action)
+            current_position = new_position  # Update position if move is successful
+        except Exception as e:
+            # Handle invalid actions
+            print("Invalid acction, please try again")
+            continue  # Continue the loop, asking for input again
+
+
+main()
 
 
 # Zadatak level 3:
 
+# Assume that the Maze is graph-like and not grid-like, so that there are different possible actions to take from each cell.
 # Add TELEPORT CELLS and modify the code to accomodate this kind of cells also.
 # Implement value iteration algorithm using Q function instead of V function.
 # Implement policy iteration algorithm using both V and Q functions.
 # In all cases update, modify, and add visualization facilities to illustrate correctness of the implementation.
-# Assume that the Maze is graph-like and not grid-like, so that there are different possible actions to take from each cell.
