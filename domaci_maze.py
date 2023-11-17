@@ -361,10 +361,9 @@ nrows, ncols = 2, 2
 fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 15))
 axes = axes.flatten()
 values = init_values(env)
-for k in range(nrows * ncols):
-    draw_values(env, values, axes)
-    axes[k].set_title(f"it={k}")
-    draw_values(env, values, ax=axes[k])
+for k, ax in enumerate(axes):
+    draw_values(env, values, ax=ax)
+    ax.set_title(f"it={k}")
     values = async_update_all_values(env, values, 1.0)
 
 
