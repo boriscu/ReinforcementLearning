@@ -404,122 +404,126 @@ def display_available_actions(maze_env, row, col):
 # Commented out Rapajas code for logic
 # TODO Make it work with graphs
 
-# env = MazeEnvironment(board)
-
-# def update_state_value(env: MazeEnvironment, s, v, gamma):
-#     """Update value of the given state.
-
-#     Args:
-#         env (MazeEnvironment): The environment to work on.
-#         s : The state (cell position).
-#         v : Values of other states.
-#         gamma : discount factor.
-#     """
-#     rhs = []
-#     for a in env.get_actions():
-#         s_new, r, _ = env(s, a)
-#         rhs.append(r + gamma * v[s_new])
-#     return max(rhs)
+env = MazeEnvironment(board)
 
 
-# def async_update_all_values(env: MazeEnvironment, v, gamma):
-#     """Update values of all states.
-
-#     Args:
-#         env (MazeEnvironment): The environment to work on.
-#         v : Values of other states.
-#         gamma : discount factor.
-#     """
-#     for s in env.get_states():
-#         if not env.is_terminal(s):
-#             v[s] = update_state_value(env, s, v, gamma)
-#     return copy(v)
+def update_state_value(env: MazeEnvironment, s, v, gamma):
+    rhs = []
+    cell = env.board[s[0], s[1]]
+    for a in env.get_possible_actions(cell, *s):
+        s_new, r, _ = env(s, a)
+        rhs.append(r + gamma * v.get(s_new, 0))  # Default to 0 if s_new not in v
+    return max(rhs) if rhs else 0  # Handle case with no actions
 
 
-# def init_values(env):
-#     """Randomly initialize states of the given environment."""
-#     values = {s: -10 * random() for s in env.get_states()}
+def async_update_all_values(env: MazeEnvironment, v, gamma):
+    """Update values of all states.
 
-#     for s in values:
-#         if env.is_terminal(s):
-#             values[s] = 0
-
-#     return values
-
-
-# def draw_values(env, values, ax=None):
-#     ax = ax if ax is not None else plt
-#     draw_board(env.board, ax=ax)
-#     for s in values:
-#         ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
-
-# values = init_values(env)
-# draw_values(env, values)
-
-# nrows, ncols = 2, 2
-# fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 15))
-# axes = axes.flatten()
-# values = init_values(env)
-# for k, ax in enumerate(axes):
-#     draw_values(env, values, ax=ax)
-#     ax.set_title(f"it={k}")
-#     values = async_update_all_values(env, values, 1.0)
+    Args:
+        env (MazeEnvironment): The environment to work on.
+        v : Values of other states.
+        gamma : discount factor.
+    """
+    for s in env.get_states():
+        if not env.is_terminal(s):
+            v[s] = update_state_value(env, s, v, gamma)
+    return copy(v)
 
 
-# def value_iteration(env, gamma, eps, v0=None, maxiter=100):
-#     v = v0 if v0 is not None else init_values(env)
-#     for k in range(maxiter):
-#         nv = async_update_all_values(env, values, gamma)
-#         err = max([abs(nv[s] - v[s]) for s in v])
-#         if err < eps:
-#             return nv, k
-#         v = nv
-#     return v, k
+def init_values(env):
+    """Randomly initialize states of the given environment."""
+    values = {s: -10 * random() for s in env.get_states()}
+
+    for s in values:
+        if env.is_terminal(s):
+            values[s] = 0
+
+    return values
 
 
-# fin_v, k = value_iteration(env, 1.0, 0.01)
-# draw_values(env, fin_v)
-# plt.title(f"Converged after {k} iterations")
+def draw_values(env, values, ax=None):
+    ax = ax if ax is not None else plt
+    draw_board(env.board, ax=ax)
+    for s in values:
+        ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
 
 
-# def greedy_action(env, s, v, gamma):
-#     vs = []
-#     for a in env.get_actions():
-#         s_next, r, _ = env(s, a)
-#         vs.append(r + gamma * v[s_next])
-#     return np.argmax(vs)
+values = init_values(env)
+draw_values(env, values)
+
+nrows, ncols = 2, 2
+fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(15, 15))
+axes = axes.flatten()
+values = init_values(env)
+for k, ax in enumerate(axes):
+    draw_values(env, values, ax=ax)
+    ax.set_title(f"it={k}")
+    values = async_update_all_values(env, values, 1.0)
 
 
-# aopt = greedy_action(env, (5, 4), fin_v, 1.0)
-# ACTIONS[aopt]
+def value_iteration(env, gamma, eps, v0=None, maxiter=100):
+    v = v0 if v0 is not None else init_values(env)
+    for k in range(maxiter):
+        nv = async_update_all_values(env, values, gamma)
+        err = max([abs(nv[s] - v[s]) for s in v])
+        if err < eps:
+            return nv, k
+        v = nv
+    return v, k
 
 
-# def optimal_policy(env, v, gamma):
-#     return {
-#         s: greedy_action(env, s, v, gamma)
-#         for s in env.get_states()
-#         if not env.is_terminal(s)
-#     }
+fin_v, k = value_iteration(env, 1.0, 0.01)
+draw_values(env, fin_v)
+plt.title(f"Converged after {k} iterations")
 
 
-# def action_symbol(a):
-#     if a == RIGHT:
-#         return "→"
-#     elif a == UP:
-#         return "↑"
-#     elif a == LEFT:
-#         return "←"
-#     elif a == DOWN:
-#         return "↓"
-#     else:
-#         raise "Unknown action"
+def greedy_action(env, s, v, gamma):
+    action_values = []
+    cell = env.board[s[0], s[1]]
+    for a in env.get_possible_actions(cell, *s):
+        s_next, r, _ = env(s, a)
+        action_values.append((a, r + gamma * v.get(s_next, 0)))
+
+    if action_values:
+        return max(action_values, key=lambda x: x[1])[
+            0
+        ]  # Return the action of the max value pair
+    else:
+        return None  # No action available
 
 
-# def draw_policy(env, policy, ax=None):
-#     ax = ax if ax is not None else plt
-#     draw_board(env.board, ax=ax)
-#     for s, a in policy.items():
-#         ax.text(s[1] - 0.25, s[0] + 0.1, action_symbol(a))
+def optimal_policy(env, v, gamma):
+    return {
+        s: greedy_action(env, s, v, gamma)
+        for s in env.get_states()
+        if not env.is_terminal(s)
+    }
+
+
+aopt = greedy_action(env, (5, 4), fin_v, 1.0)
+
+
+def action_symbol(a):
+    if a == "right":
+        return "→"
+    elif a == "up":
+        return "↑"
+    elif a == "left":
+        return "←"
+    elif a == "down":
+        return "↓"
+    else:
+        raise "Unknown action"
+
+
+def draw_policy(env, policy, ax=None):
+    ax = ax if ax is not None else plt
+    draw_board(env.board, ax=ax)
+    for s, a in policy.items():
+        if s in env.get_states() and a in env.get_possible_actions(
+            env.board[s[0], s[1]], *s
+        ):
+            ax.text(s[1] - 0.25, s[0] + 0.1, action_symbol(a), fontsize=12)
 
 
 def main():
@@ -564,8 +568,13 @@ def main():
             continue  # Continue the loop, asking for input again
 
 
-main()
+# Simulate the maze
+# main()
 
+# Test finding optimal polici
+# pi = optimal_policy(env, fin_v, 1.0)
+# draw_policy(env, pi)
+# plt.show()
 
 # Zadatak level 3:
 
