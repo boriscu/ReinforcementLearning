@@ -422,3 +422,12 @@ def draw_policy(env, policy, ax=None):
     draw_board(env.board, ax=ax)
     for s, a in policy.items():
         ax.text(s[1] - 0.25, s[0] + 0.1, action_symbol(a))
+
+
+# Zadatak level 3:
+
+# Add TELEPORT CELLS and modify the code to accomodate this kind of cells also.
+# Implement value iteration algorithm using Q function instead of V function.
+# Implement policy iteration algorithm using both V and Q functions.
+# In all cases update, modify, and add visualization facilities to illustrate correctness of the implementation.
+# Assume that the Maze is graph-like and not grid-like, so that there are different possible actions to take from each cell.
