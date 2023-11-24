@@ -1,3 +1,4 @@
+import random as rdm
 from abc import ABC, abstractmethod
 from typing import Iterable, Callable
 from copy import copy
@@ -8,13 +9,18 @@ import matplotlib.pyplot as plt
 from random import random, choices, randint, sample
 import networkx as nx
 
+from itertools import chain
 
-class Cell(ABC):
+
+class Node(ABC):
     """Abstract base class for all maze cells."""
 
-    def __init__(self, row: int, col: int):
-        self.row = row
-        self.col = col
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
+    def get_position(self) -> tuple:
+        return (self.x, self.y)
 
     @abstractmethod
     def get_reward(self) -> float:
@@ -46,22 +52,22 @@ class Cell(ABC):
         return True
 
 
-class RegularCell(Cell):
+class RegularNode(Node):
     """A common, non-terminal, steppable cell."""
 
-    def __init__(self, reward: float, row: int, col: int):
-        super().__init__(row, col)
+    def __init__(self, reward: float, x: int, y: int):
+        super().__init__(x, y)
         self.reward = reward
 
     def get_reward(self) -> float:
         return self.reward
 
 
-class TerminalCell(Cell):
+class TerminalNode(Node):
     """A terminal cell."""
 
-    def __init__(self, reward: float, row: int, col: int):
-        super().__init__(row, col)
+    def __init__(self, reward: float, x: int, y: int):
+        super().__init__(x, y)
         self.reward = reward
 
     def get_reward(self) -> float:
@@ -74,11 +80,11 @@ class TerminalCell(Cell):
         return False
 
 
-class WallCell(Cell):
+class WallNode(Node):
     """A non-steppable cell."""
 
-    def __init__(self, row: int, col: int):
-        super().__init__(row, col)
+    def __init__(self, x: int, y: int):
+        super().__init__(x, y)
 
     def get_reward(self) -> float:
         return 0
@@ -90,126 +96,41 @@ class WallCell(Cell):
         return False
 
 
-class MazeBoard:
-    """Rectangular grid of cells representing a single mase."""
+class TeleportNode(Node):
 
-    @staticmethod
-    def validate_cells(
-        cells: Iterable[Iterable[Cell]],
-    ) -> tuple[int, int, list[list[Cell]]]:
-        """
-        Utility function used to validate the given double-iterable of of cells.
+    def __init__(self, reward: float, x: int, y: int):
+        super().__init__(x, y)
+        self.reward = reward
 
-        Returns: tuple[int, int, list[list[Cell]]]
-            int: number of rows
-            int: number of columns
-            list[list[Cell]]: double-list of cells from the input iterable
-        """
-        cells = [list(row) for row in cells] if cells else []
-        if not cells:
-            raise Exception("Number of rows in a board must be at least one.")
-        if not cells[0]:
-            raise Exception("There has to be at least one column.")
-        rows_no = len(cells)
-        cols_no = len(cells[0])
-        for row in cells:
-            if not row or len(row) != cols_no:
-                raise Exception(
-                    "Each row in a a board must have the same number of columns. "
-                )
-        return rows_no, cols_no, cells
-
-    def __init__(self, cells: Iterable[Iterable[Cell]]):
-        """
-        Initialize the maze board from the given `cells`.
-
-        The input double-iterable of cells is such that the elements of the outer
-        iterable are considered to be rows. The input cells must satisfy certain
-        conditions in order to be considered valid:
-
-        * There must be at least one row.
-        * All rows must be of the same length, which is at least one.
-        """
-        rows_no, cols_no, cells = MazeBoard.validate_cells(cells)
-        self.cells = cells
-        self.rows_no = rows_no
-        self.cols_no = cols_no
-
-    def __getitem__(self, key: tuple[int, int]) -> Cell:
-        """Return cell in the given row and column."""
-        r, c = key
-        return self.cells[r][c]
+    def get_reward(self) -> float:
+        return self.reward
 
 
-# Type-hint used to indicate a function which, when invoked, generates a cell.
-CellGenerator = Callable[[], Cell]
-
-
-def create_random_board(
-    size: tuple[int, int], specs=list[tuple[float, CellGenerator]]
-) -> MazeBoard:
-    h, w = size
-    weights = [w for w, _ in specs]
-    generators = [g for _, g in specs]
-
-    def random_cell(row, col):  # Updated to include row and col
-        cell_generator = choices(generators, weights, k=1)[0]
-        return cell_generator(row, col)  # Pass row and col
-
-    cells = [[random_cell(i, j) for j in range(w)] for i in range(h)]
-    return MazeBoard(cells)
-
-
-def default_cell_color(cell: Cell) -> tuple[int, int, int]:
+"""
+def default_cell_color(: ) -> tuple[int, int, int]:
     if isinstance(cell, RegularCell):
         if cell.get_reward() == -1:
-            return (255, 255, 255)  # Regular cell
+            return (255, 255, 255)            # Regular cell
         else:
-            return (255, 0, 0)  # Regular cell with penalty
+            return (255, 0, 0)                # Regular cell with penalty
     elif isinstance(cell, WallCell):
-        return (0, 0, 0)  # Wall cell
+        return (0, 0, 0)                      # Wall cell
+    elif isinstance(cell, TerminalCell):
+        return (0, 0, 255)                    # Terminal cell
     else:
-        return (0, 0, 255)  # Terminal cell
+        return (0, 255, 0)                    # Teleport Cell
+"""
 
+"""
+    Lavirint je implementiran kao graf tj recnik. Svaki kljuc u recniku predstavlja jedan
+    cvor grafa, dok su vrednosti kljuceva list u kojima se nalaze manje liste koje sadrza
+    naredni cvor i verovatnocu prelaska u taj cvor:
 
-def draw_board(
-    board: MazeBoard, color=default_cell_color, pos: tuple[int, int] = None, ax=None
-):
-    ax = ax if ax is not None else plt
-    board_img = np.ones(shape=(board.rows_no, board.cols_no, 3), dtype=np.uint8)
-    for i in range(board.rows_no):
-        for j in range(board.cols_no):
-            board_img[i, j, :] = color(board[i, j])
-    if pos is not None:
-        row, col = pos
-        ax.text(col - 0.1, row + 0.1, "X", fontweight="bold")
-    if ax is not None:
-        ax.imshow(board_img)
-    else:
-        plt.imshow(board_img)
+        graph[node] = list[list[next_node, probability]
 
-
-# This will be used as the default specification for the generator...
-# It requires that the reqular cells with reward -1 are 7 times more likely than
-# regular cells with higher penalty, walls and terminal cells.
-
-DEFAULT_SPECS = [
-    (10, lambda row, col: RegularCell(-1, row, col)),
-    (2, lambda row, col: RegularCell(-10, row, col)),
-    (2, lambda row, col: WallCell(row, col)),
-    (1, lambda row, col: TerminalCell(-1, row, col)),
-]
-
-board = create_random_board(size=(8, 8), specs=DEFAULT_SPECS)
-
-# Let us first enumerate the possible actions for better readability.
-RIGHT = 0
-UP = 1
-LEFT = 2
-DOWN = 3
-
-# The following lus is used only to provide human-readable form of each action
-ACTIONS = ["RIGHT", "UP", "LEFT", "DOWN"]
+    Kreiranjem MazeEnviorment objekta se generise nasumican graf kao atribut. Kao argument
+    treba proslediti tuple(height, width) za visinu i sirinu lavirinta.
+"""
 
 
 class MazeEnvironment:
@@ -224,48 +145,109 @@ class MazeEnvironment:
     deciding if the state is terminal or not.
     """
 
-    def __init__(self, board: MazeBoard):
+    def __init__(self, dimensions: tuple[int, int]):
         """Initialize the enviornment by specifying the underlying maze board."""
-        self.board = board
-        self.graph = self.initialize_graph()
+        self.graph_height = dimensions[0]
+        self.graph_width = dimensions[1]
+        self.graph = self.initialize_graph(self.graph_height, self.graph_width)
 
-    def initialize_graph(self):
+    def initialize_graph(self, width, height):
         graph = {}
-        for r in range(self.board.rows_no):
-            for c in range(self.board.cols_no):
-                cell = self.board[r, c]
-                graph[cell] = self.get_possible_actions(cell, r, c)
+        total_nodes = height * width
+        terminal = 0  # flag for terminal node, if there is no terminal node in random graph, it is manually made
+
+        for w in range(1, width + 1):
+            for h in range(1, height + 1):
+                node = self.generate_random_node(w, h)
+                total_nodes -= 1
+                graph[node] = []
+
+                if isinstance(node, TerminalNode):
+                    terminal += 1
+
+        if not terminal:
+            graph_list = list(graph)
+            random_node = rdm.choice(graph_list)
+            terminal_node = TerminalNode(0, random_node.get_position()[0], random_node.get_position()[1])
+            graph.pop(random_node)
+            graph[terminal_node] = []
+
+        for node in graph:
+            graph[node] = self.set_actions_probability(node, graph)
+
         return graph
 
-    def get_possible_actions(self, cell, row, col):
-        potential_actions = {}
+    def set_actions_probability(self, node, g):
+        actions_probabilities = []
 
-        if isinstance(cell, WallCell):
-            return {}
+        total_cells = self.graph_width * self.graph_height
+        zero_cells = total_cells // 2  # number of cells with zero prob of stepping
 
-        # Check all possible directions and add them if they lead to a steppable cell
-        if row > 0 and self.board[row - 1, col].is_steppable():
-            potential_actions["up"] = (row - 1, col)
-        if row < self.board.rows_no - 1 and self.board[row + 1, col].is_steppable():
-            potential_actions["down"] = (row + 1, col)
-        if col > 0 and self.board[row, col - 1].is_steppable():
-            potential_actions["left"] = (row, col - 1)
-        if col < self.board.cols_no - 1 and self.board[row, col + 1].is_steppable():
-            potential_actions["right"] = (row, col + 1)
+        if isinstance(node, WallNode) or isinstance(node, TerminalNode):
+            return []
 
-        # # Randomly select a subset of these potential actions
-        # num_actions = randint(
-        #     1, len(potential_actions)
-        # )  # At least 1 action, up to the number of potential actions
-        # actions = dict(
-        #     sample(
-        #         list(potential_actions.items()),
-        #         min(num_actions, len(potential_actions)),
-        #     )
-        # )
+        nodes_list = [node for node in g]
 
-        return potential_actions
+        for n in nodes_list:
+            if isinstance(n, WallNode):
+                actions_probabilities.append([n, 0])
+                zero_cells -= 1
+                nodes_list.remove(n)
 
+        if isinstance(node, RegularNode):  # for teleport nodes there is no zero probabilities, except for Walls
+            while zero_cells != 0:
+                random_node = rdm.choice(nodes_list)
+                nodes_list.remove(random_node)
+                actions_probabilities.append([random_node, 0])
+                zero_cells -= 1
+
+        non_zero_probabilities = self.generate_probabilities(nodes_list)
+
+        for i in range(len(nodes_list)):
+            actions_probabilities.append([nodes_list[i], non_zero_probabilities[i]])
+
+        return actions_probabilities
+
+    @staticmethod
+    def generate_random_node(w, h):
+        prob = rdm.randint(1, 18)
+        if prob < 11:
+            return RegularNode(-1, w, h)
+        elif prob < 13:
+            return RegularNode(-10, w, h)
+        elif prob < 15:
+            return TerminalNode(0, w, h)
+        elif prob < 17:
+            return WallNode(w, h)
+        else:
+            return TeleportNode(-2, w, h)
+
+    @staticmethod
+    def generate_probabilities(cells):
+        probabilities = np.random.rand(len(cells))
+        probabilities /= sum(probabilities)
+        return probabilities
+
+    def print_graph(self):
+        values_graph = {}
+        for node in self.graph:
+            values_graph[node.get_position()] = []
+            for [next_node, prob] in self.graph[node]:
+                values_graph[node.get_position()].append([next_node.get_position(), prob])
+        self.print_values(values_graph)
+        return
+
+    @staticmethod
+    def print_values(g):
+        print('\n   ------------------  MAZE GRAPH --------------  ')
+        print(' ')
+        for node in g:
+            print(node, ": ", g[node])
+            print(' ')
+        print('   ----------------------------------------------  ')
+        return
+
+    '''
     def validate_position(self, row, col):
         """A utility function that validates a position."""
         if row < 0 or row >= self.rows_no:
@@ -275,13 +257,20 @@ class MazeEnvironment:
         if not self.board[row, col].is_steppable():
             raise Exception("Invalid position: unsteppable cell.")
         return row, col
+    '''
 
-    def move_from(self, row: int, col: int, action: str) -> tuple[int, int]:
-        if action in self.graph[self.board[row, col]]:
-            return self.graph[self.board[row, col]][action]
-        else:
-            raise Exception(f"Invalid action: {action} for cell ({row}, {col}).")
+    # returns next node
+    def move_from(self, node: Node):
+        next_node_index = self.chose_next_node(node)
+        return self.graph[node][next_node_index][0]
 
+    def chose_next_node(self, node: Node):
+        probabilities = [pair[1] for pair in self.graph[node]]
+        print(probabilities)
+        index = np.random.choice(len(probabilities), p=probabilities)
+        return index
+
+    '''
     def __call__(
         self, state: tuple[int, int], action: str
     ) -> tuple[tuple[int, int], float, bool]:
@@ -308,8 +297,9 @@ class MazeEnvironment:
             return list(self.graph[cell].keys())
         else:
             return []
+    '''
 
-
+'''
 def create_graph(maze_env):
     G = nx.DiGraph()
     for cell, actions in maze_env.graph.items():
@@ -320,8 +310,13 @@ def create_graph(maze_env):
             )  # assuming each cell has row and col attributes
             G.add_edge(source, target, action=action)
     return G
+'''
 
+dims = (3, 3)
+env = MazeEnvironment((dims))
+env.print_graph()
 
+'''
 def get_node_color(cell):
     if isinstance(cell, RegularCell) and cell.get_reward() == -10:
         return "red"
@@ -403,10 +398,9 @@ def display_available_actions(maze_env, row, col):
 
 # Commented out Rapajas code for logic
 # TODO Make it work with graphs
+'''
 
-env = MazeEnvironment(board)
-
-
+'''
 def update_state_value(env: MazeEnvironment, s, v, gamma):
     rhs = []
     cell = env.board[s[0], s[1]]
@@ -446,8 +440,9 @@ def draw_values(env, values, ax=None):
     draw_board(env.board, ax=ax)
     for s in values:
         ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
+'''
 
-
+'''
 values = init_values(env)
 draw_values(env, values)
 
@@ -528,7 +523,7 @@ def draw_policy(env, policy, ax=None):
 
 def main():
     # Initialize your environment and graph
-    env = MazeEnvironment(board)
+    env = MazeEnvironment()
     G = create_graph(env)
 
     # Start position
@@ -567,7 +562,7 @@ def main():
             print("Invalid acction, please try again")
             continue  # Continue the loop, asking for input again
 
-
+'''
 # Simulate the maze
 # main()
 
