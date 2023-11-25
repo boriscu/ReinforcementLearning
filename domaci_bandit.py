@@ -30,7 +30,7 @@ class Bandit:
             float: The obtained reward.
         """
         return self.mean + 2 * self.span * (
-            random.random() - 0.5
+                random.random() - 0.5
         )  # random number in [mean-span, mean+span]
 
 
@@ -105,12 +105,16 @@ def train(bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True)
 # Zadatak 1 : pokrenuti trening za razlicite vrednosti epsilon, prikazati rezultate i izvesti zakljucak o nagibu krive
 def prvi_zadatak():
     plt.figure(figsize=(14, 3))
-    for i in range(3):
-        # 0.1, 0.001, 0.0001
-        envi, rew, q1 = train(epsilon=10 ** (-i - 1), plotting=False)
+    e = [0.95, 0.8, 0.5, 0.3, 0.1, 0.01, 0.001]
+    iteration = 0
+    for eps in e:
 
-        plot_e(3, i + 1, envi.bandits, rew)
-        plt.title(10 ** (-i - 1))
+        envi, rew, q1 = train(epsilon=eps, plotting=False)
+
+        iteration += 1
+
+        plot_e(len(e), iteration, envi.bandits, rew)
+        plt.title(eps)
 
     plt.show()
 
@@ -206,7 +210,7 @@ def drugi_zadatak(plotting=False):
 
 # Zadatak 3, pod a) - nakon 4000 iteracija promena srednje vrednosti i spanovi bandita.
 def treci_zadatak_a(
-    bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True
+        bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, plotting=True
 ):
     bandits = [
         Bandit(10 * (random.random() - 0.5), 5 * random.random())
@@ -284,18 +288,18 @@ def loss_function(q, envi):
 
 # Zadatak 3, pod b) - U random iteracijama promena srednjih vrednosti i spanova bandita.
 def time_change_train(
-    bandits_no=5,
-    attempts_no=5000,
-    alpha=0.1,
-    epsilon=0.1,
-    mean_shift_interval=100,
-    span_shift_interval=200,
-    shift_probability=0.5,
-    mean_shift_amount=1.5,
-    span_shift_amount=1.5,
-    shift_increment=4,
-    num_runs=3,
-    plotting=False,
+        bandits_no=5,
+        attempts_no=5000,
+        alpha=0.1,
+        epsilon=0.1,
+        mean_shift_interval=100,
+        span_shift_interval=200,
+        shift_probability=0.5,
+        mean_shift_amount=1.5,
+        span_shift_amount=1.5,
+        shift_increment=4,
+        num_runs=3,
+        plotting=False,
 ):
     fig, axes = plt.subplots(
         2, num_runs, figsize=(5 * num_runs, 10), sharex="col", squeeze=False
@@ -317,8 +321,8 @@ def time_change_train(
         span_shifts = []
 
         for t in trange(
-            attempts_no,
-            desc=f"Run {run+1} with shifts {mean_shift_amount}, {span_shift_amount}",
+                attempts_no,
+                desc=f"Run {run + 1} with shifts {mean_shift_amount}, {span_shift_amount}",
         ):
             optimal_means.append(max(bandit.mean for bandit in env.bandits))
             actual_best_bandit.append(max(bandit.mean for bandit in env.bandits))
@@ -460,8 +464,61 @@ def plot_mean(bandits, q_value_history):
         plt.title(f"Bandit {i + 1}")
 
 
+# Dodatni zadatak: Prikazati realne i procenjene vrednosti za sve bandite na jednom grafiku
+def dodatni_zadatak(
+        bandits_no=5, attempts_no=5000, alpha=0.1, epsilon=0.1, step=500, plotting=True
+):
+    bandits = [
+        Bandit(10 * (random.random() - 0.5), 5 * random.random())
+        for _ in range(bandits_no)
+    ]
+    env = BanditsEnvironment(bandits)
+    q = [0 for _ in range(bandits_no)]
+
+    q_value_history = np.zeros((attempts_no, len(bandits)))
+
+    bandits_mean_history = np.zeros((attempts_no, len(bandits)))
+    bandits_mean_history[0] = [bandit.mean for bandit in bandits]
+
+    for t in trange(attempts_no):
+        if t % step == 0:
+
+            # Kreiranje novih bandita (m, s)
+            bandits = [
+                Bandit(10 * (random.random() - 0.5), 5 * random.random())
+                for _ in range(bandits_no)
+            ]
+            env = BanditsEnvironment(bandits)
+            bandits_mean_history[t] = [bandit.mean for bandit in bandits]
+
+        a = choose_eps_greedy_action(q, epsilon)
+        r = env.take_action(a)
+        q[a] = q[a] + alpha * (r - q[a])
+
+        if t != 0 and t % step != 0:
+            bandits_mean_history[t] = bandits_mean_history[t-1]
+
+        q_value_history[t] = q
+
+    plot_all_bandits_history(bandits, q_value_history, bandits_mean_history)
+
+# Primeti se da sto je parametar step manji, algoritmu je teze tj. losije ce procenjivati realne vrednosti
+# zato sto nema dovoljno iteracija za preciznu procenu.
+
+def plot_all_bandits_history(bandits, q_value_history, bandtis_hist):
+    plt.figure(figsize=(15, 10))
+    for i in range(len(bandits)):
+        plt.plot(bandtis_hist[:, i], label=f"Realna srednja vrednost bandita {i}", linestyle='--')
+        plt.plot(q_value_history[:, i], label=f"Procenjena srednja vrednost bandita {i}")
+        plt.legend()
+    plt.show()
+
+
+'''
 prvi_zadatak()
 drugi_zadatak(plotting=True)
 treci_zadatak_a(plotting=True)
 treci_zadatak_b(plotting=True)
 cetvrti_zadatak()
+'''
+dodatni_zadatak()
