@@ -1,3 +1,4 @@
+import math
 import random as rdm
 from abc import ABC, abstractmethod
 from typing import Iterable, Callable
@@ -13,7 +14,6 @@ from itertools import chain
 
 
 class Node(ABC):
-    """Abstract base class for all maze cells."""
 
     def __init__(self, x: int, y: int):
         self.x = x
@@ -24,36 +24,19 @@ class Node(ABC):
 
     @abstractmethod
     def get_reward(self) -> float:
-        """The reward an agent receives when stepping onto this cell."""
         pass
 
     def is_steppable(self) -> bool:
-        """Checks if an agent can step onto this cell.
-
-        Regular and terminal cells are steppable.
-        Walls are not steppable.
-        """
         return True
 
     def is_terminal(self) -> bool:
-        """Checks if the cell is terminal.
-
-        When stepping onto a terminal cell the agent exits
-        the maze and finishes the game.
-        """
         return False
 
     def has_value(self) -> bool:
-        """Check if the cell has value.
-
-        The value is defined for regular cells and terminal cells,
-        but not for walls.
-        """
         return True
 
 
 class RegularNode(Node):
-    """A common, non-terminal, steppable cell."""
 
     def __init__(self, reward: float, x: int, y: int):
         super().__init__(x, y)
@@ -64,7 +47,6 @@ class RegularNode(Node):
 
 
 class TerminalNode(Node):
-    """A terminal cell."""
 
     def __init__(self, reward: float, x: int, y: int):
         super().__init__(x, y)
@@ -81,7 +63,6 @@ class TerminalNode(Node):
 
 
 class WallNode(Node):
-    """A non-steppable cell."""
 
     def __init__(self, x: int, y: int):
         super().__init__(x, y)
@@ -106,20 +87,19 @@ class TeleportNode(Node):
         return self.reward
 
 
-"""
-def default_cell_color(: ) -> tuple[int, int, int]:
-    if isinstance(cell, RegularCell):
-        if cell.get_reward() == -1:
-            return (255, 255, 255)            # Regular cell
+def node_color(node: Node) -> tuple[int, int, int]:
+    if isinstance(node, RegularNode):
+        if node.get_reward() == -1:
+            return (255, 255, 255)  # Regular node
         else:
-            return (255, 0, 0)                # Regular cell with penalty
-    elif isinstance(cell, WallCell):
-        return (0, 0, 0)                      # Wall cell
-    elif isinstance(cell, TerminalCell):
-        return (0, 0, 255)                    # Terminal cell
+            return (255, 0, 0)  # Regular node with penalty
+    elif isinstance(node, WallNode):
+        return (0, 0, 0)  # Wall node
+    elif isinstance(node, TerminalNode):
+        return (0, 0, 255)  # Terminal node
     else:
-        return (0, 255, 0)                    # Teleport Cell
-"""
+        return (0, 255, 0)  # Teleport node
+
 
 """
     Lavirint je implementiran kao graf tj recnik. Svaki kljuc u recniku predstavlja jedan
@@ -129,32 +109,34 @@ def default_cell_color(: ) -> tuple[int, int, int]:
         graph[node] = list[list[next_node, probability]
 
     Kreiranjem MazeEnviorment objekta se generise nasumican graf kao atribut. Kao argument
-    treba proslediti tuple(height, width) za visinu i sirinu lavirinta.
+    treba proslediti tuple(height, width) za visinu i sirinu lavirinta. Takodje, atribut 
+    current_node predstavlja trenutni objekat cvora, koji sadrzi informacije o poziciji.
+
+    Metodom move_from se na osnovu zadatih verovatnoca prelazi u naredno stanje. Povratna 
+    vrednost jeste naredni cvor.
+
+    Metoda print_graph ispisuje graf, ali treba naglasiti da ona ne ispisuje tacan graf vec:
+
+        graph[node.get_position()] = list[list[next_node.get_position(), probability]
+
 """
 
 
 class MazeEnvironment:
-    """Wrapper for a maze board that behaves like an MDP environment.
 
-    This is a callable object that behaves like a deterministic MDP state
-    transition function: given the current state and action, it returns the
-    following state and reward.
-
-    In addition, the environment object is capable of enumerating all possible
-    states and all possible actions. For a given state it is also capable of
-    deciding if the state is terminal or not.
-    """
-
-    def __init__(self, dimensions: tuple[int, int]):
-        """Initialize the enviornment by specifying the underlying maze board."""
+    def __init__(self, dimensions: tuple[int, int], initial_position: tuple[int, int]):
+        if (initial_position[0] > dimensions[0] or initial_position[0] < 1) or (
+                initial_position[1] > dimensions[1] or initial_position[1] < 1):
+            raise Exception(" Invalid initial position given.\n")
         self.graph_height = dimensions[0]
         self.graph_width = dimensions[1]
         self.graph = self.initialize_graph(self.graph_height, self.graph_width)
+        self.current_node = self.set_init_position(initial_position)
 
     def initialize_graph(self, width, height):
         graph = {}
         total_nodes = height * width
-        terminal = 0  # flag for terminal node, if there is no terminal node in random graph, it is manually made
+        terminal = 0  # flag for terminal node
 
         for w in range(1, width + 1):
             for h in range(1, height + 1):
@@ -165,20 +147,21 @@ class MazeEnvironment:
                 if isinstance(node, TerminalNode):
                     terminal += 1
 
+        # if there is no terminal node in random graph, it is manually made, but not from wall node
         if not terminal:
             graph_list = list(graph)
-            random_node = rdm.choice(graph_list)
+            random_node = self.random_not_wall(graph_list)
             terminal_node = TerminalNode(0, random_node.get_position()[0], random_node.get_position()[1])
             graph.pop(random_node)
             graph[terminal_node] = []
 
         for node in graph:
-            graph[node] = self.set_actions_probability(node, graph)
+            graph[node] = self.set_probabilities(node, graph)
 
         return graph
 
-    def set_actions_probability(self, node, g):
-        actions_probabilities = []
+    def set_probabilities(self, node, g):
+        probabilities = []
 
         total_cells = self.graph_width * self.graph_height
         zero_cells = total_cells // 2  # number of cells with zero prob of stepping
@@ -190,7 +173,7 @@ class MazeEnvironment:
 
         for n in nodes_list:
             if isinstance(n, WallNode):
-                actions_probabilities.append([n, 0])
+                probabilities.append([n, 0])
                 zero_cells -= 1
                 nodes_list.remove(n)
 
@@ -198,15 +181,15 @@ class MazeEnvironment:
             while zero_cells != 0:
                 random_node = rdm.choice(nodes_list)
                 nodes_list.remove(random_node)
-                actions_probabilities.append([random_node, 0])
+                probabilities.append([random_node, 0])
                 zero_cells -= 1
 
         non_zero_probabilities = self.generate_probabilities(nodes_list)
 
         for i in range(len(nodes_list)):
-            actions_probabilities.append([nodes_list[i], non_zero_probabilities[i]])
+            probabilities.append([nodes_list[i], non_zero_probabilities[i]])
 
-        return actions_probabilities
+        return probabilities
 
     @staticmethod
     def generate_random_node(w, h):
@@ -247,87 +230,71 @@ class MazeEnvironment:
         print('   ----------------------------------------------  ')
         return
 
-    '''
-    def validate_position(self, row, col):
-        """A utility function that validates a position."""
-        if row < 0 or row >= self.rows_no:
-            raise Exception("Invalid row position.")
-        if col < 0 or col >= self.cols_no:
-            raise Exception("Invalid column position.")
-        if not self.board[row, col].is_steppable():
-            raise Exception("Invalid position: unsteppable cell.")
-        return row, col
-    '''
-
-    # returns next node
+    # returns next node and reward
     def move_from(self, node: Node):
         next_node_index = self.chose_next_node(node)
-        return self.graph[node][next_node_index][0]
+        self.current_node = self.graph[node][next_node_index][0]
+        return self.current_node, self.current_node.get_reward()
 
     def chose_next_node(self, node: Node):
         probabilities = [pair[1] for pair in self.graph[node]]
-        print(probabilities)
         index = np.random.choice(len(probabilities), p=probabilities)
         return index
 
-    '''
-    def __call__(
-        self, state: tuple[int, int], action: str
-    ) -> tuple[tuple[int, int], float, bool]:
-        row, col = state
-        new_row, new_col = self.move_from(row, col, action)
-        new_cell = self.board[new_row, new_col]
-        reward = new_cell.get_reward()
-        is_terminal = new_cell.is_terminal()
-        return (new_row, new_col), reward, is_terminal
+    def is_terminal(self, node: Node):
+        return node.is_terminal()
 
-    def get_states(self):
-        states = []
-        for r in range(self.board.rows_no):
-            for c in range(self.board.cols_no):
-                if self.board[r, c].is_steppable():
-                    states.append((r, c))
-        return states
+    def get_graph(self):
+        return self.graph
 
-    def is_terminal(self, s):
-        return self.board[s[0], s[1]].is_terminal()
+    def get_current_position(self):
+        return self.current_node.get_position()
 
-    def get_actions(self, cell):
-        if cell in self.graph:
-            return list(self.graph[cell].keys())
-        else:
-            return []
-    '''
+    def get_current_node(self):
+        return self.current_node
 
-'''
-def create_graph(maze_env):
-    G = nx.DiGraph()
-    for cell, actions in maze_env.graph.items():
-        for action, target in actions.items():
-            source = (
-                cell.row,
-                cell.col,
-            )  # assuming each cell has row and col attributes
-            G.add_edge(source, target, action=action)
-    return G
-'''
+    def set_init_position(self, position: tuple[int, int]):
+        for node in self.graph:
+            if node.get_position() == position:
+                return node
 
-dims = (3, 3)
-env = MazeEnvironment((dims))
+    # recursive search for node that is not wall cell
+    def random_not_wall(self, g):
+        random_node = rdm.choice(g)
+        if isinstance(random_node, WallNode):
+            random_node = self.random_not_wall(g)
+        return random_node
+
+
+def find_terminal(e: MazeEnvironment):
+    iteration = 1
+    gain = 0
+    gamma = 0.9
+    current_node = e.get_current_node()
+    if e.is_terminal(current_node):
+        print(f"\nFound terminal node at position {e.get_current_position()} in iteration {iteration} \n")
+        print(f"Final gain is: {gain}")
+        return
+    print(f"Current position, iteration and gain: {e.get_current_position()} , {iteration}, {gain}")
+    while True:
+        current_node, reward = e.move_from(current_node)
+        iteration += 1
+        gain += reward * math.pow(gamma, iteration - 1)
+        if e.is_terminal(current_node):
+            print(f"\nFound terminal node at position {e.get_current_position()} in iteration {iteration}.")
+            print(f"Final gain is: {gain}.")
+            return
+        print(f"Current position, iteration and gain: {e.get_current_position()} , {iteration}, {gain}")
+
+
+initial = (1, 1)
+dims = (4, 3)
+
+env = MazeEnvironment(dims, initial)
 env.print_graph()
 
+find_terminal(env)
 '''
-def get_node_color(cell):
-    if isinstance(cell, RegularCell) and cell.get_reward() == -10:
-        return "red"
-    elif isinstance(cell, RegularCell) and cell.get_reward() == -1:
-        return "gray"
-    elif isinstance(cell, WallCell):
-        return "black"
-    elif isinstance(cell, TerminalCell):
-        return "blue"
-    # Add more as needed
-
 
 def plot_maze_graph(G, maze_env, current_position):
     pos = {
@@ -398,6 +365,7 @@ def display_available_actions(maze_env, row, col):
 
 # Commented out Rapajas code for logic
 # TODO Make it work with graphs
+
 '''
 
 '''
@@ -440,9 +408,8 @@ def draw_values(env, values, ax=None):
     draw_board(env.board, ax=ax)
     for s in values:
         ax.text(s[1] - 0.25, s[0] + 0.1, f"{values[s]:.1f}")
-'''
 
-'''
+
 values = init_values(env)
 draw_values(env, values)
 
