@@ -274,8 +274,10 @@ def find_terminal(e: MazeEnvironment):
     if e.is_terminal(current_node):
         print(f"\nFound terminal node at position {e.get_current_position()} in iteration {iteration} \n")
         print(f"Final gain is: {gain}")
+        plot_maze_graph(e, current_node.get_position())
         return
     print(f"Current position, iteration and gain: {e.get_current_position()} , {iteration}, {gain}")
+    plot_maze_graph(e, current_node.get_position())
     while True:
         current_node, reward = e.move_from(current_node)
         iteration += 1
@@ -283,78 +285,74 @@ def find_terminal(e: MazeEnvironment):
         if e.is_terminal(current_node):
             print(f"\nFound terminal node at position {e.get_current_position()} in iteration {iteration}.")
             print(f"Final gain is: {gain}.")
+            plot_maze_graph(e, current_node.get_position())
             return
         print(f"Current position, iteration and gain: {e.get_current_position()} , {iteration}, {gain}")
+        plot_maze_graph(e, current_node.get_position())
 
 
-initial = (1, 1)
-dims = (4, 3)
+def get_node_color(cell):
+    if isinstance(cell, RegularNode) and cell.get_reward() == -10:
+        return "red"
+    elif isinstance(cell, RegularNode) and cell.get_reward() == -1:
+        return "gray"
+    elif isinstance(cell, WallNode):
+        return "black"
+    elif isinstance(cell, TerminalNode):
+        return "blue"
+    else:
+        return "green"
 
-env = MazeEnvironment(dims, initial)
-env.print_graph()
 
-find_terminal(env)
-'''
+def plot_maze_graph(env: MazeEnvironment, current_position: tuple[int, int]):
+    g = nx.DiGraph()
+    graph = env.get_graph()
+    current_node = None
 
-def plot_maze_graph(G, maze_env, current_position):
-    pos = {
-        (r, c): (c, -r)
-        for r in range(maze_env.board.rows_no)
-        for c in range(maze_env.board.cols_no)
-    }
+    for node in graph:
+        position = node.get_position()
+        if node not in g:
+            g.add_node(node, pos=position)
 
-    # Add all cells to the graph as nodes
-    for r in range(maze_env.board.rows_no):
-        for c in range(maze_env.board.cols_no):
-            cell = maze_env.board[r, c]
-            if (r, c) not in G:
-                G.add_node(
-                    (r, c)
-                )  # Add cell as a node if it's not already in the graph
+    node_colors = {node: get_node_color(node) for node in g.nodes()}
 
-    # Create a dictionary for node colors
-    node_colors = {(r, c): get_node_color(maze_env.board[r, c]) for r, c in G.nodes()}
+    plt.figure(figsize=(10, 7))
 
-    plt.figure(figsize=(12, 8))
-
-    # Separate nodes based on whether they have actions or not
-    action_nodes = set(u for u, v, d in G.edges(data=True))
-    no_action_nodes = set(G.nodes()) - action_nodes
-
-    # Draw nodes with actions (as circles)
     nx.draw_networkx_nodes(
-        G,
-        pos,
-        nodelist=action_nodes,
-        node_color=[node_colors[n] for n in action_nodes],
+        g,
+        pos=nx.get_node_attributes(g, 'pos'),
+        node_color=[node_colors[n] for n in g.nodes()],
         node_size=700,
     )
 
-    # Draw nodes without actions (as squares)
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        nodelist=no_action_nodes,
-        node_color=[node_colors[n] for n in no_action_nodes],
-        node_size=700,
-        node_shape="s",
-    )
+    for node in graph:
+        if node.get_position() == current_position:
+            current_node = node
 
-    # Drawing edges
-    nx.draw_networkx_edges(G, pos, edge_color="black", arrows=False)
-
-    current_pos = pos[current_position]
-    plt.text(
-        current_pos[0],
-        current_pos[1],
-        "X",
-        color="black",
-        fontsize=12,
-        ha="center",
-        va="center",
+    nx.draw_networkx_labels(
+        g,
+        pos=nx.get_node_attributes(g, 'pos'),
+        labels={current_node: 'X'},
+        font_size=10,
+        font_color='white',
+        font_weight='bold',
+        verticalalignment='center',
+        horizontalalignment='center',
     )
 
     plt.show()
+
+
+initial = (1, 1)
+dims = (7, 5)
+
+e = MazeEnvironment(dims, initial)
+
+current = (3, 5)
+
+find_terminal(e)
+
+'''
 
 
 def display_available_actions(maze_env, row, col):
