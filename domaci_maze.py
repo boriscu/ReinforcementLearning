@@ -87,20 +87,6 @@ class TeleportNode(Node):
         return self.reward
 
 
-def node_color(node: Node) -> tuple[int, int, int]:
-    if isinstance(node, RegularNode):
-        if node.get_reward() == -1:
-            return (255, 255, 255)  # Regular node
-        else:
-            return (255, 0, 0)  # Regular node with penalty
-    elif isinstance(node, WallNode):
-        return (0, 0, 0)  # Wall node
-    elif isinstance(node, TerminalNode):
-        return (0, 0, 255)  # Terminal node
-    else:
-        return (0, 255, 0)  # Teleport node
-
-
 """
     Lavirint je implementiran kao graf tj recnik. Svaki kljuc u recniku predstavlja jedan
     cvor grafa, dok su vrednosti kljuceva list u kojima se nalaze manje liste koje sadrza
@@ -151,7 +137,7 @@ class MazeEnvironment:
         if not terminal:
             graph_list = list(graph)
             random_node = self.random_not_wall(graph_list)
-            terminal_node = TerminalNode(0, random_node.get_position()[0], random_node.get_position()[1])
+            terminal_node = TerminalNode(-1, random_node.get_position()[0], random_node.get_position()[1])
             graph.pop(random_node)
             graph[terminal_node] = []
 
@@ -199,7 +185,7 @@ class MazeEnvironment:
         elif prob < 13:
             return RegularNode(-10, w, h)
         elif prob < 15:
-            return TerminalNode(0, w, h)
+            return TerminalNode(-1, w, h)
         elif prob < 17:
             return WallNode(w, h)
         else:
@@ -220,13 +206,16 @@ class MazeEnvironment:
         self.print_values(values_graph)
         return
 
-    @staticmethod
-    def print_values(g):
+    def print_values(self, g):
         print('\n   ------------------  MAZE GRAPH --------------  ')
         print(' ')
         for node in g:
-            print(node, ": ", g[node])
-            print(' ')
+            if self.get_current_pos_node(node).get_reward() == -10:
+                print(node, "* : ", g[node])
+                print(' ')
+            else:
+                print(node, ": ", g[node])
+                print(' ')
         print('   ----------------------------------------------  ')
         return
 
@@ -244,14 +233,22 @@ class MazeEnvironment:
     def is_terminal(self, node: Node):
         return node.is_terminal()
 
+    def is_terminal_pos(self, position):
+        for g in self.graph:
+            if g.get_position() == position:
+                return g.is_terminal()
+
     def get_graph(self):
         return self.graph
 
-    def get_current_position(self):
-        return self.current_node.get_position()
-
     def get_current_node(self):
         return self.current_node
+
+    def get_current_pos_node(self, pos):
+        for g in self.graph:
+            if g.get_position() == pos:
+                return g
+        raise Exception("Invalid position given.")
 
     def set_init_position(self, position: tuple[int, int]):
         for node in self.graph:
@@ -265,12 +262,19 @@ class MazeEnvironment:
             random_node = self.random_not_wall(g)
         return random_node
 
+    # returns list[tuple] of probabilities (that are not zero) for node
+    def get_actions_probs(self, node: Node):
+        return [(pair[0], pair[1]) for pair in self.graph[node] if pair[1] != 0]
+
 
 def find_terminal(e: MazeEnvironment):
     iteration = 1
     gain = 0
     gamma = 0.9
     current_node = e.get_current_node()
+    initial_node_p = e.get_actions_probs(current_node)
+    print(initial_node_p)
+    print('\n')
     if e.is_terminal(current_node):
         print(f"\nFound terminal node at position {e.get_current_position()} in iteration {iteration} \n")
         print(f"Final gain is: {gain}")
@@ -343,28 +347,59 @@ def plot_maze_graph(env: MazeEnvironment, current_position: tuple[int, int]):
     plt.show()
 
 
+def init_values(env: MazeEnvironment):
+    return {s.get_position(): -20 * random() if not env.is_terminal(s) else 0 for s in env.get_graph()}
+
+
+def update_state_value(env: MazeEnvironment, position, values, gamma):
+    # print(" -------------------------------------------- ")
+    # print(f"\nCurrent values for position {position}:\n ", values)
+    possible_values = []
+    current_node = env.get_current_pos_node(position)
+    # print("Current node position: ", current_node.get_position())
+    p = env.get_actions_probs(current_node)
+    # print("\nVerovatnoce prelazaka: ", p)
+    for next_node, prob in p:  # nikada ne udje ovde ili lose uradi?
+        x = prob * (next_node.get_reward() + gamma * values[next_node.get_position()])
+        possible_values.append(x)
+        # print(f"{next_node.get_position()} i verovatnoca {prob}")
+    # print(possible_values, "\n")
+    return sum(possible_values) if possible_values else -1
+
+
+def async_update_all_values(env: MazeEnvironment, values, gamma):
+    # print("\nValues inside 1:\n ", values)
+    for s in values:
+        if not env.is_terminal_pos(s):
+            values[s] = update_state_value(env, s, values, gamma)
+    return copy(values)
+
+
+def value_iteration(env, gamma, eps, v0=None, maxit=100):
+    values = v0 if v0 is not None else init_values(env)
+    for k in range(maxit):
+        print(f"\nIteration: {k + 1}")
+        print("Old values: ", values)
+        values_copy = copy(values)
+        new_values = async_update_all_values(env, values, gamma)
+        print("New values: ", new_values)
+        err = max([abs(new_values[s] - values_copy[s]) for s in values])
+        print("Error is: ", err)
+        if err < eps:
+            return new_values, k + 1
+        values = new_values
+    return values, k + 1
+
+
 initial = (1, 1)
-dims = (7, 5)
+dims = (2, 3)
 
-e = MazeEnvironment(dims, initial)
+en = MazeEnvironment(dims, initial)
+en.print_graph()
 
-current = (3, 5)
-
-find_terminal(e)
-
-'''
-
-
-def display_available_actions(maze_env, row, col):
-    cell = maze_env.board[row, col]
-    actions = maze_env.get_possible_actions(cell, row, col)
-    print("Available actions:", ", ".join(actions.keys()))
-
-
-# Commented out Rapajas code for logic
-# TODO Make it work with graphs
-
-'''
+v, ite = value_iteration(en, 1, 0.01)
+print(f"\nFinished value iteration on iteration: {ite}")
+print(v)
 
 '''
 def update_state_value(env: MazeEnvironment, s, v, gamma):
