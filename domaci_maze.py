@@ -188,7 +188,11 @@ class MazeEnvironment:
                 zero_cells -= 1
 
         # number of nodes that can be reached with one action
-        action_len = math.ceil(len(nodes_list) / len(ACTIONS))
+        # action_len = math.ceil(len(nodes_list) / len(ACTIONS))
+        if len(nodes_list) / len(ACTIONS) > 1.5:
+            action_len = math.ceil(len(nodes_list) / len(ACTIONS))
+        else:
+            action_len = math.floor(len(nodes_list) / len(ACTIONS))
 
         # shuffle actions
         random_actions = ACTIONS
@@ -292,6 +296,12 @@ class MazeEnvironment:
     def get_action_probabilities(self, node: Node, action):
         return [(pair[1], pair[2]) for pair in self.graph[node] if pair[0] == action]
 
+    # returns next node for given probabilities, nodes_probs is list[node,prob]
+    def get_next_node(self, nodes_probs):
+        probabilities = [pair[1] for pair in nodes_probs]
+        index = np.random.choice(len(probabilities), p=probabilities)
+        return nodes_probs[index][0]
+
 
 def get_node_color(cell):
     if isinstance(cell, RegularNode) and cell.get_reward() == -10:
@@ -330,21 +340,32 @@ def plot_maze_graph(env: MazeEnvironment):
 
 
 '''
-    Sto se tice same implementacije algoritama, odradjena je na standardan nacin.
+    Sto se tice same implementacije algoritama, odradjena je na standardan nacin, u nastavku
+    detljnije objasnjenje.
 
-    Procene Q i V vrednosti se vrse pozivom funkcije value_iteration, u okviru koje postoji
+                                   Value iteration: 
+
+        Procene Q i V vrednosti se vrse pozivom funkcije value_iteration, u okviru koje postoji
     parametar q_function koji je po default-u postaljen na False, sto znaci da se radi 
     procena V. Postavljanjem njega na True pri pozivu se racuna Q. Unutar funckije se vrsi 
     azuriranje vrednosti ili dok greska ne bude manja od zadate vrednosti ili maxit puta.
     Unutar asinhronog azuriranja ( jedne iteracije ) se poziva update_q_value/update_v_value
     u zavisnoti od potrebe, a u tim funkcijama subelmanove jednacine za racunanje vrednosti.
 
-    Pronalazenje optimalne politike se vrsi pozivom optimal_policy, koja vraca recnik kao:
+    Pronalazenje optimalne politike se vrsi pozivom generate optimal_policy, koja vraca politiku
+    kao recnik:
 
         dict[position] = optimal_action 
 
     Takodje se parametrom q_function podesava da li je po V ili Q. Unutar nje se poziva 
     greedy_action za svako stanje i time dobija politika.
+
+                                    Policy iteration:
+
+        Pozivom funkcije policy_iteration se izvrsava algoritam, opet q_function parametar
+    sluzi za biranje Q ili V funkcije. Unutar nje se izvrsava petlja dok se ne pojave 2 uzastupne
+    iste politike, gde se prvo vrsi estimacija vrednosti V ili Q za zadatu politiku, a zatim se
+    formira greedy politika za te zadate vrednosti i tako do kraja.
 
 '''
 
@@ -405,18 +426,30 @@ def async_update_all_values(env: MazeEnvironment, values, gamma, q_function):
 def value_iteration(env, gamma, eps, maxit=100, q_function=False):
     values = init_q_values(env) if q_function else init_v_values(env)
     for iteration in range(maxit):
-        print(f"\nIteration: {iteration + 1}")
-        print("Old values: ", values)
+        # print(f"\nIteration: {iteration + 1}")
+        # print("Old values: ", values)
         values_copy = copy(values)
         new_values = async_update_all_values(env, values, gamma, q_function)
-        print("New values: ", new_values)
+        # print("New values: ", new_values)
         err = max([abs(new_values[s] - values_copy[s]) for s in values])
         if err < eps:
-            print("Final error is: ", err)
+            # print("Final error is: ", err)
             return new_values, iteration + 1
-        print("Error is: ", err)
+        # print("Error is: ", err)
         values = new_values
     return values, iteration + 1
+
+
+# should return the smallest number action if there are more actions that have the same value
+# if values of both actions 1 and 2 are -1.0 , it returns 1
+def best_action_min_arg(actions_probs):
+    max_probability = max(prob for _, prob in actions_probs)
+    max_probability_elements = [(action, prob) for action, prob in actions_probs if prob == max_probability]
+
+    min_action = min(action for action, _ in max_probability_elements)
+    min_action_element = [(action, prob) for action, prob in max_probability_elements if action == min_action][0][0]
+
+    return min_action_element
 
 
 def greedy_action(env, current_node, values, gamma, q_function=False):
@@ -428,8 +461,8 @@ def greedy_action(env, current_node, values, gamma, q_function=False):
                 for next_action in ACTIONS:
                     possible_values_one_node.append(values[next_node.get_position(), next_action])
                 action_values.append((action, prob * (next_node.get_reward() + gamma * max(possible_values_one_node))))
-        return max(action_values, key=lambda x: x[1])[0] if action_values else None
-
+        return best_action_min_arg(action_values) if action_values else None
+        # return max(action_values, key=lambda x: x[1])[0] if action_values else None
     else:
         action_values = []
         for action in ACTIONS:
@@ -437,15 +470,82 @@ def greedy_action(env, current_node, values, gamma, q_function=False):
             for next_node, prob in env.get_action_probabilities(current_node, action):
                 temp += prob * (next_node.get_reward() + gamma * values[next_node.get_position()])
             action_values.append((action, temp))
-        return max(action_values, key=lambda x: x[1])[0] if max(action_values) != 0 else None
+        return best_action_min_arg(action_values) if max(action_values) != 0 else None
+        # return max(action_values, key=lambda x: x[1])[0] if max(action_values) != 0 else None
 
 
-def optimal_policy(env, values, gamma, q_function=False):
+def generate_optimal_policy(env, values, gamma, q_function=False):
     return {
         node.get_position(): greedy_action(env, node, values, gamma, q_function)
         for node in env.get_graph()
         if not (node.is_terminal() or not node.is_steppable())
     }
+
+
+def generate_random_policy(env):
+    policy = {}
+    for s in env.get_graph():
+        policy[s.get_position()] = rdm.choice(ACTIONS)
+    return policy
+
+
+# does value iteration for given policy, to be used in policy iteration
+def evaluate_values(env, policy, gamma, tolerance, q_function=False):
+    values = init_q_values(env) if q_function else init_v_values(env)
+    new_values = copy(values)
+    if q_function:
+        while True:
+            # node_action is (s,a) tuple
+            for node_action, prob in values:
+                current_node = env.get_current_pos_node(node_action)
+                if isinstance(current_node, WallNode):
+                    new_values[node_action, prob] = -100
+                elif isinstance(current_node, TerminalNode):
+                    new_values[node_action, prob] = 0
+                else:
+                    action = policy[current_node.get_position()]
+                    probs = env.get_action_probabilities(current_node, action)
+                    next_node = env.get_next_node(probs)
+                    if isinstance(next_node, TerminalNode):
+                        new_values[node_action, prob] = next_node.get_reward()  # if next is terminal value is just -1
+                    else:
+                        next_action = policy[next_node.get_position()]
+                        new_values[node_action, prob] = next_node.get_reward() + gamma * values[
+                            next_node.get_position(), next_action]
+            err = max([abs(values[s] - new_values[s]) for s in values])
+            if err < tolerance:
+                return new_values
+            values = new_values
+    else:
+        while True:
+            for node in env.get_graph():
+                if isinstance(node, WallNode):
+                    new_values[node.get_position()] = -100
+                elif isinstance(node, TerminalNode):
+                    new_values[node.get_position()] = 0
+                else:
+                    action = policy[node.get_position()]
+                    probs = env.get_action_probabilities(node, action)
+                    next_node = env.get_next_node(probs)
+                    new_values[node] = next_node.get_reward() + gamma * values[next_node.get_position()]
+            err = max([abs(values[s] - new_values[s]) for s in values])
+            if err < tolerance:
+                return new_values
+            values = new_values
+
+
+def greedy_policy(env, values, gamma, q_function):
+    return generate_optimal_policy(env, values, gamma, q_function)
+
+
+def policy_iteration(env: MazeEnvironment, gamma, tolerance, q_function=False):
+    policy = generate_random_policy(env)
+    while True:
+        values = evaluate_values(env, policy, gamma, tolerance, q_function)
+        new_policy = greedy_policy(env, values, gamma, q_function)
+        if new_policy == policy:
+            return policy
+        policy = new_policy
 
 
 '''
@@ -469,15 +569,25 @@ print(v)
 print(f"\nFinal Q values on iteration {q_it}")
 print(q)
 
-print("\n--------------------------------------------- OPTIMAL POLICY ---------------------------------------------- ")
+print("\n---------------------------------- OPTIMAL POLICIES AFTER VALUE ITERATION --------------------------------- ")
 
-optimal_pol_v = optimal_policy(en, v, 0.9)
+optimal_pol_v = generate_optimal_policy(en, v, 0.9)
 print(f"\nOptimal policy after V iteration is:")
 print(optimal_pol_v)
 
-optimal_pol_q = optimal_policy(en, q, 0.9, q_function=True)
+optimal_pol_q = generate_optimal_policy(en, q, 0.9, q_function=True)
 print(f"\nOptimal policy after Q iteration is:")
 print(optimal_pol_q)
+
+print("\n---------------------------------- OPTIMAL POLICIES AFTER POLICY ITERATION -------------------------------- ")
+
+optimal_pol_pi_v = policy_iteration(en, 0.9, 0.01)
+print(f"\nOptimal policy after policy iteration using V is:")
+print(optimal_pol_pi_v)
+
+optimal_pol_pi_q = policy_iteration(en, 0.9, 0.01, q_function=True)
+print(f"\nOptimal policy after policy iteration using Q is:")
+print(optimal_pol_pi_q)
 
 en.print_graph()
 plot_maze_graph(en)
