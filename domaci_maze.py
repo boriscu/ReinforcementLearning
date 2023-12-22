@@ -7,7 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from random import random
+
 import networkx as nx
+from prettytable import PrettyTable
 
 
 class Node(ABC):
@@ -993,45 +995,82 @@ def policy_iteration(
     veci od polovine ukupnog broja cvorova. Ogranicenje za vece grafove ne postoji.
 """
 
-dims = (3, 2)
 
+dims = (3, 2)
 en = MazeEnvironment(dims)
 
 v, v_it = value_iteration(en, 0.9, 0.01)
 q, q_it = value_iteration(en, 0.9, 0.01, q_function=True)
 
-print(
-    "\n----------------------------------- FINISHED VALUE ITERATION ALGORITHMS ----------------------------------- "
-)
+# V values table
+v_table = PrettyTable()
+v_table.field_names = ["Position", "V Value"]
+for position, value in v.items():
+    v_table.add_row([position, value])
 
-print(f"\nFinal V values on iteration {v_it}")
-print(v)
+print(
+    "\n----------------------------------- FINISHED VALUE ITERATION ALGORITHMS -----------------------------------\n"
+)
+print(f"Final V values on iteration {v_it}")
+print(v_table)
+
+# Q values table
+q_table = PrettyTable()
+q_table.field_names = ["State-Action", "Q Value"]
+for state_action, value in q.items():
+    q_table.add_row([state_action, value])
+
 print(f"\nFinal Q values on iteration {q_it}")
-print(q)
-
-print(
-    "\n---------------------------------- OPTIMAL POLICIES AFTER VALUE ITERATION --------------------------------- "
-)
+print(q_table)
 
 optimal_pol_v = generate_optimal_policy(en, v, 0.9)
-print(f"\nOptimal policy after V iteration is:")
-print(optimal_pol_v)
-
 optimal_pol_q = generate_optimal_policy(en, q, 0.9, q_function=True)
-print(f"\nOptimal policy after Q iteration is:")
-print(optimal_pol_q)
+
+# Optimal policy after V iteration table
+optimal_v_table = PrettyTable()
+optimal_v_table.field_names = ["Position", "Optimal Action"]
+for position, action in optimal_pol_v.items():
+    optimal_v_table.add_row([position, action])
 
 print(
-    "\n---------------------------------- OPTIMAL POLICIES AFTER POLICY ITERATION -------------------------------- "
+    "\n---------------------------------- OPTIMAL POLICIES AFTER VALUE ITERATION ---------------------------------\n"
 )
+print("Optimal policy after V iteration is:")
+print(optimal_v_table)
+
+# Optimal policy after Q iteration table
+optimal_q_table = PrettyTable()
+optimal_q_table.field_names = ["Position", "Optimal Action"]
+for position, action in optimal_pol_q.items():
+    optimal_q_table.add_row([position, action])
+
+print("\nOptimal policy after Q iteration is:")
+print(optimal_q_table)
 
 optimal_pol_pi_v = policy_iteration(en, 0.9, 0.01)
-print(f"\nOptimal policy after policy iteration using V is:")
-print(optimal_pol_pi_v)
-
 optimal_pol_pi_q = policy_iteration(en, 0.9, 0.01, q_function=True)
-print(f"\nOptimal policy after policy iteration using Q is:")
-print(optimal_pol_pi_q)
+
+# Policy iteration using V table
+pi_v_table = PrettyTable()
+pi_v_table.field_names = ["Position", "Optimal Action"]
+for position, action in optimal_pol_pi_v.items():
+    pi_v_table.add_row([position, action])
+
+print(
+    "\n---------------------------------- OPTIMAL POLICIES AFTER POLICY ITERATION --------------------------------\n"
+)
+print("Optimal policy after policy iteration using V is:")
+print(pi_v_table)
+
+# Policy iteration using Q table
+pi_q_table = PrettyTable()
+pi_q_table.field_names = ["Position", "Optimal Action"]
+for position, action in optimal_pol_pi_q.items():
+    pi_q_table.add_row([position, action])
+
+print("\nOptimal policy after policy iteration using Q is:")
+print(pi_q_table)
+
 
 en.print_graph()
 plot_maze_graph(en)
