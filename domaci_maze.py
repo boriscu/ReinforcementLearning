@@ -481,30 +481,97 @@ def get_node_color(cell: Node) -> str:
 
 def plot_maze_graph(env: MazeEnvironment):
     """
-    Plots the maze graph visually using networkx and matplotlib.
+    Plots the maze graph visually using networkx and matplotlib, displaying all nodes, including wall nodes, but excluding edges to or from wall nodes.
 
     Args:
         env (MazeEnvironment): The maze environment to be plotted.
     """
     g = nx.DiGraph()
     graph = env.get_graph()
+    edge_labels = {}
+    pos = {}  # Dictionary to hold positions
+    offset = 0.03  # Adjust this value to move the label position
+    edge_colors = []
+
+    action_colors = {
+        1: "magenta",
+        2: "orange",
+        3: "cyan",
+        # Add more colors if needed
+    }
 
     for node in graph:
         position = node.get_position()
-        if node not in g:
-            g.add_node(node, pos=position)
+        pos[node] = position  # Ensure every node has a position in pos dictionary
+        g.add_node(node, pos=position)
 
-    node_colors = {node: get_node_color(node) for node in g.nodes()}
+        if not isinstance(node, WallNode):  # Skip adding edges for wall nodes
+            for action, next_node, probability in graph[node]:
+                if (
+                    action != 0
+                    and probability != 0
+                    and not isinstance(next_node, WallNode)
+                ):
+                    g.add_edge(node, next_node)
+                    edge_colors.append(
+                        action_colors.get(action, "black")
+                    )  # Default to black if action not in mapping
+                    edge_labels[(node, next_node)] = f"{next_node.get_reward()}"
+
+    node_colors = {
+        node: get_node_color(node) for node in g.nodes()
+    }  # Get colors for nodes in g
+    node_color_list = [
+        node_colors[node] for node in g.nodes()
+    ]  # Create color list based on nodes in g
 
     plt.figure(figsize=(10, 7))
-
-    nx.draw_networkx_nodes(
-        g,
-        pos=nx.get_node_attributes(g, "pos"),
-        node_color=[node_colors[n] for n in g.nodes()],
-        node_size=700,
+    nx.draw_networkx_nodes(g, pos, node_color=node_color_list, node_size=700)
+    nx.draw_networkx_edges(
+        g, pos, edge_color=edge_colors, arrowstyle="->", arrowsize=30
     )
 
+    # Adjusting label positions for edge labels
+    edge_labels_pos = {
+        edge: [
+            (pos[edge[0]][0] + pos[edge[1]][0]) / 2 + offset,
+            (pos[edge[0]][1] + pos[edge[1]][1]) / 2 + offset,
+        ]
+        for edge in edge_labels
+    }
+
+    for edge, new_pos in edge_labels_pos.items():
+        label = edge_labels[edge]
+        plt.text(new_pos[0], new_pos[1], label, fontsize=10, color="red")
+
+    # Legends for node types and actions
+    node_type_colors = {
+        "Regular Node": "gray",
+        "Terminal Node": "blue",
+        "Wall Node": "black",
+        "Teleport Node": "green",
+    }
+    node_legends = [
+        plt.Line2D([0], [0], color=color, marker="o", linestyle="", markersize=10)
+        for color in node_type_colors.values()
+    ]
+    action_legends = [
+        plt.Line2D([0], [0], color=color, marker="", linestyle="-")
+        for color in action_colors.values()
+    ]
+
+    legend1 = plt.legend(
+        node_legends, node_type_colors.keys(), title="Node Types", loc="upper left"
+    )
+    plt.gca().add_artist(legend1)
+    plt.legend(
+        action_legends,
+        [f"Action {a}" for a in action_colors.keys()],
+        title="Actions",
+        loc="lower left",
+    )
+
+    plt.axis("off")
     plt.show()
 
 
@@ -926,7 +993,7 @@ def policy_iteration(
     veci od polovine ukupnog broja cvorova. Ogranicenje za vece grafove ne postoji.
 """
 
-dims = (2, 3)
+dims = (3, 2)
 
 en = MazeEnvironment(dims)
 
