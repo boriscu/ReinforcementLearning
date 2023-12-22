@@ -1,43 +1,68 @@
 import math
 import random as rdm
 from abc import ABC, abstractmethod
-from typing import Iterable, Callable
 from copy import copy
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from random import random, choices, randint, sample
+from random import random
 import networkx as nx
-
-from itertools import chain
 
 
 class Node(ABC):
-
     def __init__(self, x: int, y: int):
         self.x = x
         self.y = y
 
     def get_position(self) -> tuple:
+        """
+        Gets the position of the node.
+
+        Returns:
+            tuple: A tuple (x, y) representing the x and y coordinates of the node.
+        """
         return (self.x, self.y)
 
     @abstractmethod
     def get_reward(self) -> float:
+        """
+        Gets the reward value associated with the node.
+
+        Returns:
+            float: The reward value for the node. Specific value depends on the type of node.
+        """
         pass
 
     def is_steppable(self) -> bool:
+        """
+        Checks if the node can be stepped on.
+
+        Returns:
+            bool: True if the node is steppable, False otherwise.
+        """
         return True
 
     def is_terminal(self) -> bool:
+        """
+        Checks if the node is a terminal node.
+
+        Returns:
+            bool: True if the node is a terminal node, False otherwise.
+        """
         return False
 
     def has_value(self) -> bool:
+        """
+        Checks if the node holds a value.
+
+        Returns:
+            bool: True if the node has a value, False otherwise.
+        """
         return True
 
 
 class RegularNode(Node):
-
     def __init__(self, reward: float, x: int, y: int):
         super().__init__(x, y)
         self.reward = reward
@@ -47,7 +72,6 @@ class RegularNode(Node):
 
 
 class TerminalNode(Node):
-
     def __init__(self, reward: float, x: int, y: int):
         super().__init__(x, y)
         self.reward = reward
@@ -63,7 +87,6 @@ class TerminalNode(Node):
 
 
 class WallNode(Node):
-
     def __init__(self, x: int, y: int):
         super().__init__(x, y)
 
@@ -78,7 +101,6 @@ class WallNode(Node):
 
 
 class TeleportNode(Node):
-
     def __init__(self, reward: float, x: int, y: int):
         super().__init__(x, y)
         self.reward = reward
@@ -88,46 +110,62 @@ class TeleportNode(Node):
 
 
 """
-    Lavirint je implementiran kao graf tj recnik. Svaki kljuc u recniku predstavlja jedan
-    cvor grafa, dok su vrednosti kljuceva liste u kojima se nalaze manje liste koje sadrze
-    akciju, naredni cvor i verovatnocu prelaska u taj cvor pri toj akciji:
+    The maze is implemented as a graph, specifically as a dictionary. Each key in the dictionary represents a node in the graph, 
+    while the values are lists containing smaller lists. These smaller lists consist of an action, the next node, 
+    and the probability of moving to that node when the action is taken:
 
         graph[node] = list[list[action, next_node, probability]]
 
-    NAPOMENA: Ackije su prirodni brojevi, ako je akcija 0, to znaci da ne postoji veza
-    izmedju ta da cvora ( svakako ce onda biti i verovatnoca 0 ).
+    Note: Actions are represented by natural numbers. If an action is 0, 
+    it implies that there is no connection between those nodes (hence, the probability will also be 0).
 
-    Kreiranjem MazeEnviorment objekta se generise nasumican graf kao atribut. Kao argument
-    treba proslediti tuple(height, width) za visinu i sirinu lavirinta.
+    Creating a MazeEnvironment object generates a random graph as an attribute. 
+    The dimensions of the maze (height and width) should be passed as a tuple argument to the constructor.
 
-    Graf se inicijalizuje funkcijom initialize_graph (sama pozvana konstruktorom okruzenja).
-    Unutar nje se formira nasumican graf, gde se za svaki cvor grafa generisu verovatnoce
-    prelaska na sledece cvorove.Za terminalne cvorve i zidove, ne postoje stanja u koja se
-    moze preci iz njih, za regularne postoji mogucnost prelaska na polovinu, dok za teleport
-    posotji mogucnost na sve ostale cvorove (sem zidova). Detaljniji koraci su objasnjeni unutra.
+    The graph is initialized using the initialize_graph function (which is called by the environment's constructor). 
+    Within this function, a random graph is formed where probabilities of transitioning to the next nodes are generated for each node in the graph. 
+    For terminal nodes and walls, there are no states to transition into from them. For regular nodes, 
+    there is a possibility of transitioning to half of the other nodes, while for teleport nodes, 
+    there is a possibility to transition to any other node (except walls). 
+    More detailed steps are explained inside the function.
 
-    Metoda print_graph ispisuje graf, ali treba naglasiti da ona ne ispisuje tacan graf
-    vec mnogo prirodnije:
+    The print_graph method outputs the graph, but it's important to note that it does not display the exact graph structure, 
+    but rather a more natural representation:
 
         graph[node.get_position()] = list[list[action, next_node.get_position(), probability]
 
-    Sto se tice ostalih metoda, jasno je sta rade po imenu. 
+    As for the other methods, their functionality is clear from their names.
 
-    Akcije su podesive, ali treba paziti da budu prirodni brojevi. Ogranicenje za njih je napisano
-    kod poziva svih algoritama.
+    Actions are configurable but must be natural numbers. 
+    Restrictions on them are written at the point of calling all algorithms.
 """
 
 ACTIONS = [1, 2, 3]
 
 
 class MazeEnvironment:
-
     def __init__(self, dimensions: tuple[int, int]):
+        """
+        Initializes the MazeEnvironment with a specified size.
+
+        Args:
+            dimensions (tuple[int, int]): A tuple representing the dimensions (width, height) of the maze.
+        """
         self.graph_height = dimensions[0]
         self.graph_width = dimensions[1]
         self.graph = self.initialize_graph(self.graph_height, self.graph_width)
 
-    def initialize_graph(self, width, height):
+    def initialize_graph(self, width: int, height: int) -> dict:
+        """
+        Initializes and returns the graph for the maze environment.
+
+        Args:
+            width (int): The width of the maze.
+            height (int): The height of the maze.
+
+        Returns:
+            dict: The graph representing the maze, where keys are node objects and values are lists of connected nodes with probabilities.
+        """
         graph = {}
         terminal = 0  # flag for terminal node
 
@@ -139,15 +177,17 @@ class MazeEnvironment:
 
                 if isinstance(node, TerminalNode):
                     terminal += 1
-        '''
+        """
             If there is no terminal node in random graph, it is manually made, but not from wall node
             because that would mean none of the other nodes would have probability different than zero
             to step on it ( which is characteristic of WallNode ).
-        '''
+        """
         if not terminal:
             graph_list = list(graph)
             random_node = self.random_not_wall(graph_list)
-            terminal_node = TerminalNode(-1, random_node.get_position()[0], random_node.get_position()[1])
+            terminal_node = TerminalNode(
+                -1, random_node.get_position()[0], random_node.get_position()[1]
+            )
             graph.pop(random_node)
             graph[terminal_node] = []
 
@@ -157,8 +197,17 @@ class MazeEnvironment:
 
         return graph
 
-    def set_probabilities(self, node, g):
+    def set_probabilities(self, node: Node, g: dict) -> list:
+        """
+        Sets and returns the movement probabilities for the given node to other nodes in the graph.
 
+        Args:
+            node (Node): The node for which probabilities are to be set.
+            g (dict): The graph of the maze environment.
+
+        Returns:
+            list: A list of probabilities for moving from the given node to other nodes.
+        """
         # terminal and wall node do not have any probabilities
         if isinstance(node, WallNode) or isinstance(node, TerminalNode):
             return []
@@ -200,7 +249,6 @@ class MazeEnvironment:
         actions_copy = copy(random_actions)  # actions yet to be processed
 
         for action in random_actions:
-
             #  when it's the last action, all the left nodes are connected to the last action
             if len(actions_copy) == 1:
                 nodes_for_current_action = nodes_list
@@ -210,18 +258,36 @@ class MazeEnvironment:
                     nodes_list.remove(n)
 
             # generates probabilities with sum of 1
-            non_zero_probabilities_action = self.generate_probabilities(nodes_for_current_action)
+            non_zero_probabilities_action = self.generate_probabilities(
+                nodes_for_current_action
+            )
 
             # appends (action, next_node, prob)
             for i in range(len(nodes_for_current_action)):
-                probabilities.append([action, nodes_for_current_action[i], non_zero_probabilities_action[i]])
+                probabilities.append(
+                    [
+                        action,
+                        nodes_for_current_action[i],
+                        non_zero_probabilities_action[i],
+                    ]
+                )
 
             actions_copy.remove(action)  # removes processed action
 
         return probabilities
 
     @staticmethod
-    def generate_random_node(w, h):
+    def generate_random_node(w: int, h: int) -> Node:
+        """
+        Generates a random node of a specific type based on a probability distribution.
+
+        Args:
+            w (int): The x-coordinate of the node.
+            h (int): The y-coordinate of the node.
+
+        Returns:
+            Node: A randomly generated node of type RegularNode, TerminalNode, WallNode, or TeleportNode.
+        """
         prob = rdm.randint(1, 18)
         if prob < 11:
             return RegularNode(-1, w, h)
@@ -235,75 +301,172 @@ class MazeEnvironment:
             return TeleportNode(-2, w, h)
 
     @staticmethod
-    def generate_probabilities(cells):
+    def generate_probabilities(cells: list) -> np.ndarray:
+        """
+        Generates and returns a normalized probability distribution for a list of cells.
+
+        This method creates a random probability for each cell and normalizes these probabilities so that they sum up to 1.
+
+        Args:
+            cells (list): A list of cells for which probabilities are to be generated.
+
+        Returns:
+            np.ndarray: An array of normalized probabilities corresponding to each cell.
+        """
+
         probabilities = np.random.rand(len(cells))
         probabilities /= sum(probabilities)
         return probabilities
 
     # prints graph (with position)
     def print_graph(self):
+        """
+        Prints the maze graph in a human-readable format. The graph is represented in terms of positions, actions, and probabilities.
+        """
         values_graph = {}
         for node in self.graph:
             values_graph[node.get_position()] = []
             for [action, next_node, prob] in self.graph[node]:
-                values_graph[node.get_position()].append([action, next_node.get_position(), prob])
+                values_graph[node.get_position()].append(
+                    [action, next_node.get_position(), prob]
+                )
         self.print_values(values_graph)
         return
 
-    def print_values(self, g):
-        print("\n----------------------------------------------- MAZE GRAPH "
-              "------------------------------------------------ ")
-        print(' ')
+    def print_values(self, g: dict):
+        """
+        Prints the values of the maze graph.
+
+        Args:
+            g (dict): The graph of the maze, where keys are node positions and values are lists of actions, next node positions, and probabilities.
+        """
+        print(
+            "\n----------------------------------------------- MAZE GRAPH "
+            "------------------------------------------------ "
+        )
+        print(" ")
         for node in g:
             if self.get_current_pos_node(node).get_reward() == -10:
                 print(node, "* : ", g[node])  # for regular node with penalty
-                print(' ')
+                print(" ")
             else:
                 print(node, ": ", g[node])
-                print(' ')
+                print(" ")
         return
 
     # returns True if given node is terminal
     @staticmethod
-    def is_terminal(node: Node):
+    def is_terminal(node: Node) -> bool:
+        """
+        Checks if the given node is a terminal node.
+
+        Args:
+            node (Node): The node to be checked.
+
+        Returns:
+            bool: True if the node is a terminal node, False otherwise.
+        """
+
         return node.is_terminal()
 
     # return True if node at position (x,y) is terminal
-    def is_terminal_pos(self, position):
+    def is_terminal_pos(self, position: tuple) -> bool:
+        """
+        Checks if the node at the given position is a terminal node.
+
+        Args:
+            position (tuple): The position of the node.
+
+        Returns:
+            bool: True if the node at the given position is terminal, False otherwise.
+        """
         for g in self.graph:
             if g.get_position() == position:
                 return g.is_terminal()
 
     # returns graph
-    def get_graph(self):
+    def get_graph(self) -> dict:
+        """
+        Returns the graph of the maze environment.
+
+        Returns:
+            dict: The graph representing the maze.
+        """
         return self.graph
 
     # returns node at position (x,y)
-    def get_current_pos_node(self, pos):
+    def get_current_pos_node(self, pos: tuple) -> Node:
+        """
+        Returns the node at the given position.
+
+        Args:
+            pos (tuple): The position of the node.
+
+        Returns:
+            Node: The node at the given position.
+
+        Raises:
+            Exception: If the position is invalid.
+        """
         for g in self.graph:
             if g.get_position() == pos:
                 return g
         raise Exception("Invalid position given.")
 
     # search for node that is not wall node in graph
-    def random_not_wall(self, g):
+    def random_not_wall(self, g: list) -> Node:
+        """
+        Selects a random node from the graph that is not a wall node.
+
+        Args:
+            g (list): The list of nodes in the graph.
+
+        Returns:
+            Node: A randomly selected node that is not a wall node.
+        """
         random_node = rdm.choice(g)
         if isinstance(random_node, WallNode):
             random_node = self.random_not_wall(g)
         return random_node
 
-    # returns list[(next_node, prob)] for given action from given node
-    def get_action_probabilities(self, node: Node, action):
+    def get_action_probabilities(self, node: Node, action: int) -> list:
+        """
+        Returns a list of tuples containing the next node and the probability of reaching it for a given action from the given node.
+
+        Args:
+            node (Node): The node from which the action is taken.
+            action (int): The action to be taken.
+
+        Returns:
+            list: A list of tuples (next_node, probability) for the given action.
+        """
         return [(pair[1], pair[2]) for pair in self.graph[node] if pair[0] == action]
 
-    # returns next node for given probabilities, nodes_probs is list[node,prob]
-    def get_next_node(self, nodes_probs):
+    def get_next_node(self, nodes_probs: list) -> Node:
+        """
+        Selects the next node based on the given probabilities.
+
+        Args:
+            nodes_probs (list): A list of tuples (node, probability) representing the possible next nodes and their probabilities.
+
+        Returns:
+            Node: The selected next node based on the probabilities.
+        """
         probabilities = [pair[1] for pair in nodes_probs]
         index = np.random.choice(len(probabilities), p=probabilities)
         return nodes_probs[index][0]
 
 
-def get_node_color(cell):
+def get_node_color(cell: Node) -> str:
+    """
+    Determines the color representation of a node for visualization.
+
+    Args:
+        cell (Node): The node for which the color is to be determined.
+
+    Returns:
+        str: The color string representing the node type.
+    """
     if isinstance(cell, RegularNode) and cell.get_reward() == -10:
         return "red"
     elif isinstance(cell, RegularNode) and cell.get_reward() == -1:
@@ -317,6 +480,12 @@ def get_node_color(cell):
 
 
 def plot_maze_graph(env: MazeEnvironment):
+    """
+    Plots the maze graph visually using networkx and matplotlib.
+
+    Args:
+        env (MazeEnvironment): The maze environment to be plotted.
+    """
     g = nx.DiGraph()
     graph = env.get_graph()
 
@@ -331,7 +500,7 @@ def plot_maze_graph(env: MazeEnvironment):
 
     nx.draw_networkx_nodes(
         g,
-        pos=nx.get_node_attributes(g, 'pos'),
+        pos=nx.get_node_attributes(g, "pos"),
         node_color=[node_colors[n] for n in g.nodes()],
         node_size=700,
     )
@@ -339,44 +508,62 @@ def plot_maze_graph(env: MazeEnvironment):
     plt.show()
 
 
-'''
-    Sto se tice same implementacije algoritama, odradjena je na standardan nacin, u nastavku
-    detljnije objasnjenje.
+"""
+    When it comes to the implementation of the algorithms, it is done in a standard way, 
+    and a more detailed explanation follows:
 
                                    Value iteration: 
 
-        Procene Q i V vrednosti se vrse pozivom funkcije value_iteration, u okviru koje postoji
-    parametar q_function koji je po default-u postaljen na False, sto znaci da se radi 
-    procena V. Postavljanjem njega na True pri pozivu se racuna Q. Unutar funckije se vrsi 
-    azuriranje vrednosti ili dok greska ne bude manja od zadate vrednosti ili maxit puta.
-    Unutar asinhronog azuriranja ( jedne iteracije ) se poziva update_q_value/update_v_value
-    u zavisnoti od potrebe, a u tim funkcijama subelmanove jednacine za racunanje vrednosti.
+    The estimation of Q-values and V-values is performed by calling the value_iteration function. 
+    Within this function, there is a parameter q_function which is set to False by default. 
+    This implies that the function will estimate V-values. Setting q_function to True during the function call switches the estimation to Q-values. 
+    The function updates these values until the error becomes less than a specified threshold or until a maximum number of iterations (maxit) is reached. 
+    During each iteration (an asynchronous update), either update_q_value or update_v_value is called depending on whether Q-values or V-values are 
+    being estimated, respectively. In these functions, the Bellman equations are used for the calculation of values.
 
-    Pronalazenje optimalne politike se vrsi pozivom generate optimal_policy, koja vraca politiku
-    kao recnik:
+    The process of finding the optimal policy is conducted by calling generate_optimal_policy, which returns the policy as a dictionary:
 
         dict[position] = optimal_action 
 
-    Takodje se parametrom q_function podesava da li je po V ili Q. Unutar nje se poziva 
-    greedy_action za svako stanje i time dobija politika.
+    The q_function parameter also adjusts whether the policy is based on V-values or Q-values. 
+    Inside this function, greedy_action is called for each state to derive the policy.
 
                                     Policy iteration:
 
-        Pozivom funkcije policy_iteration se izvrsava algoritam, opet q_function parametar
-    sluzi za biranje Q ili V funkcije. Unutar nje se izvrsava petlja dok se ne pojave 2 uzastupne
-    iste politike, gde se prvo vrsi estimacija vrednosti V ili Q za zadatu politiku, a zatim se
-    formira greedy politika za te zadate vrednosti i tako do kraja.
-
-'''
-
-
-# v values are dict[position] = value
-def init_v_values(env: MazeEnvironment):
-    return {s.get_position(): -20 * random() if not env.is_terminal(s) else 0 for s in env.get_graph()}
+    The policy_iteration function is used to execute the policy iteration algorithm. 
+    Again, the q_function parameter determines whether the algorithm uses Q-values or V-values. 
+    Within this function, a loop runs until two consecutive policies are the same. 
+    Initially, it estimates the V-values or Q-values for the given policy, and then forms a greedy policy based on these estimated values. 
+    This process repeats until convergence.
+"""
 
 
-# q values are dict[position, action] = value
-def init_q_values(env: MazeEnvironment):
+def init_v_values(env: MazeEnvironment) -> dict:
+    """
+    Initializes the V-values for the value iteration algorithm.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+
+    Returns:
+        dict: A dictionary with positions as keys and initial V-values as values.
+    """
+    return {
+        s.get_position(): -20 * random() if not env.is_terminal(s) else 0
+        for s in env.get_graph()
+    }
+
+
+def init_q_values(env: MazeEnvironment) -> dict:
+    """
+    Initializes the Q-values for the Q-learning algorithm.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+
+    Returns:
+        dict: A dictionary with (position, action) tuples as keys and initial Q-values as values.
+    """
     q = {}
     for s in env.get_graph():
         for action in ACTIONS:
@@ -387,32 +574,75 @@ def init_q_values(env: MazeEnvironment):
     return q
 
 
-# update v value for one node
-def update_v_value(env: MazeEnvironment, position, values, gamma):
+def update_v_value(
+    env: MazeEnvironment, position: tuple, values: dict, gamma: float
+) -> float:
+    """
+    Updates the V-value for a single node.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        position (tuple): The position of the node.
+        values (dict): The current V-values.
+        gamma (float): The discount factor.
+
+    Returns:
+        float: The updated V-value for the node.
+    """
     current_node = env.get_current_pos_node(position)
     possible_values = []
     for action in ACTIONS:
         x = 0
         for next_node, prob in env.get_action_probabilities(current_node, action):
-            x += prob * (next_node.get_reward() + gamma * values[next_node.get_position()])
+            x += prob * (
+                next_node.get_reward() + gamma * values[next_node.get_position()]
+            )
         possible_values.append(x)
     return max(possible_values) if max(possible_values) != 0 else -100  # wall node
 
 
-# update q value for one node, action
-def update_q_value(env: MazeEnvironment, state, values, gamma):
+def update_q_value(
+    env: MazeEnvironment, state: tuple, values: dict, gamma: float
+) -> float:
+    """
+    Updates the Q-value for a single state-action pair.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        state (tuple): The state-action pair (position, action).
+        values (dict): The current Q-values.
+        gamma (float): The discount factor.
+
+    Returns:
+        float: The updated Q-value for the state-action pair.
+    """
     current_node = env.get_current_pos_node(state[0])
     possible_values = []
     for next_node, prob in env.get_action_probabilities(current_node, state[1]):
         possible_values_one_node = []
         for action in ACTIONS:
             possible_values_one_node.append(values[next_node.get_position(), action])
-        possible_values.append(prob * (next_node.get_reward() + gamma * max(possible_values_one_node)))
+        possible_values.append(
+            prob * (next_node.get_reward() + gamma * max(possible_values_one_node))
+        )
     return sum(possible_values) if possible_values else -100  # wall node
 
 
-# updates values for one iteration
-def async_update_all_values(env: MazeEnvironment, values, gamma, q_function):
+def async_update_all_values(
+    env: MazeEnvironment, values: dict, gamma: float, q_function: bool
+) -> dict:
+    """
+    Performs an asynchronous update of all values (V or Q) for one iteration.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        values (dict): The current values (V or Q).
+        gamma (float): The discount factor.
+        q_function (bool): Whether to update Q-values instead of V-values.
+
+    Returns:
+        dict: The updated values after one iteration.
+    """
     for s in values:
         if q_function:
             if not env.is_terminal_pos(s[0]):  # q values are (position,action)
@@ -423,44 +653,105 @@ def async_update_all_values(env: MazeEnvironment, values, gamma, q_function):
     return copy(values)
 
 
-def value_iteration(env, gamma, eps, maxit=100, q_function=False):
+def value_iteration(
+    env: MazeEnvironment,
+    gamma: float,
+    eps: float,
+    maxit: int = 100,
+    q_function: bool = False,
+) -> tuple:
+    """
+    Performs the value iteration algorithm on the maze environment.
+
+    Args:
+        env (MazeEnvironment): The maze environment on which the algorithm is run.
+        gamma (float): The discount factor.
+        eps (float): The threshold for determining convergence.
+        maxit (int, optional): Maximum number of iterations. Defaults to 100.
+        q_function (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
+
+    Returns:
+        tuple: A tuple containing the final values and the number of iterations it took to converge.
+    """
     values = init_q_values(env) if q_function else init_v_values(env)
     for iteration in range(maxit):
-        # print(f"\nIteration: {iteration + 1}")
-        # print("Old values: ", values)
         values_copy = copy(values)
         new_values = async_update_all_values(env, values, gamma, q_function)
-        # print("New values: ", new_values)
         err = max([abs(new_values[s] - values_copy[s]) for s in values])
         if err < eps:
-            # print("Final error is: ", err)
             return new_values, iteration + 1
-        # print("Error is: ", err)
         values = new_values
     return values, iteration + 1
 
 
-# should return the smallest number action if there are more actions that have the same value
-# if values of both actions 1 and 2 are -1.0 , it returns 1
-def best_action_min_arg(actions_probs):
+def best_action_min_arg(actions_probs: list) -> int:
+    """
+    Determines the best action with the smallest number if there are multiple actions with the same value.
+    *If values of both actions 1 and 2 are -1.0 , it returns 1*
+
+    Args:
+        actions_probs (list): A list of tuples (action, probability).
+
+    Returns:
+        int: The action with the smallest number among those with the highest value.
+    """
     max_probability = max(prob for _, prob in actions_probs)
-    max_probability_elements = [(action, prob) for action, prob in actions_probs if prob == max_probability]
+    max_probability_elements = [
+        (action, prob) for action, prob in actions_probs if prob == max_probability
+    ]
 
     min_action = min(action for action, _ in max_probability_elements)
-    min_action_element = [(action, prob) for action, prob in max_probability_elements if action == min_action][0][0]
+    min_action_element = [
+        (action, prob)
+        for action, prob in max_probability_elements
+        if action == min_action
+    ][0][0]
 
     return min_action_element
 
 
-def greedy_action(env, current_node, values, gamma, q_function=False):
+def greedy_action(
+    env: MazeEnvironment,
+    current_node: Node,
+    values: dict,
+    gamma: float,
+    q_function: bool = False,
+) -> int:
+    """
+    Determines the best action to take from the current node based on a greedy approach.
+
+    This function calculates the expected utility for each possible action from the current node and chooses the action that maximizes this expected utility. If 'q_function' is True, it uses Q-values for the calculation; otherwise, it uses V-values.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        current_node (Node): The current node from which the action is to be determined.
+        values (dict): A dictionary containing the current estimated values (either V-values or Q-values).
+        gamma (float): The discount factor.
+        q_function (bool, optional): Specifies whether to use Q-values (True) or V-values (False) in the calculations. Defaults to False.
+
+    Returns:
+        int: The action that maximizes the expected utility. Returns None if no action is found (e.g., in a terminal state).
+    """
+
     if q_function:
         action_values = []
         for action in ACTIONS:
             for next_node, prob in env.get_action_probabilities(current_node, action):
                 possible_values_one_node = []
                 for next_action in ACTIONS:
-                    possible_values_one_node.append(values[next_node.get_position(), next_action])
-                action_values.append((action, prob * (next_node.get_reward() + gamma * max(possible_values_one_node))))
+                    possible_values_one_node.append(
+                        values[next_node.get_position(), next_action]
+                    )
+                action_values.append(
+                    (
+                        action,
+                        prob
+                        * (
+                            next_node.get_reward()
+                            + gamma * max(possible_values_one_node)
+                        ),
+                    )
+                )
         return best_action_min_arg(action_values) if action_values else None
         # return max(action_values, key=lambda x: x[1])[0] if action_values else None
     else:
@@ -468,13 +759,30 @@ def greedy_action(env, current_node, values, gamma, q_function=False):
         for action in ACTIONS:
             temp = 0
             for next_node, prob in env.get_action_probabilities(current_node, action):
-                temp += prob * (next_node.get_reward() + gamma * values[next_node.get_position()])
+                temp += prob * (
+                    next_node.get_reward() + gamma * values[next_node.get_position()]
+                )
             action_values.append((action, temp))
         return best_action_min_arg(action_values) if max(action_values) != 0 else None
         # return max(action_values, key=lambda x: x[1])[0] if max(action_values) != 0 else None
 
 
-def generate_optimal_policy(env, values, gamma, q_function=False):
+def generate_optimal_policy(
+    env: MazeEnvironment, values: dict, gamma: float, q_function: bool = False
+) -> dict:
+    """
+    Generates the optimal policy for the maze environment based on the given value function or Q-values.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        values (dict): The dictionary of values (V or Q) used for determining the policy.
+        gamma (float): The discount factor.
+        q_function (bool, optional): Whether the values are Q-values. Defaults to False.
+
+    Returns:
+        dict: The optimal policy as a dictionary where keys are positions and values are actions.
+    """
+
     return {
         node.get_position(): greedy_action(env, node, values, gamma, q_function)
         for node in env.get_graph()
@@ -482,7 +790,16 @@ def generate_optimal_policy(env, values, gamma, q_function=False):
     }
 
 
-def generate_random_policy(env):
+def generate_random_policy(env: MazeEnvironment) -> dict:
+    """
+    Generates a random policy for the maze environment.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+
+    Returns:
+        dict: A dictionary representing the random policy, where keys are positions and values are actions.
+    """
     policy = {}
     for s in env.get_graph():
         policy[s.get_position()] = rdm.choice(ACTIONS)
@@ -490,7 +807,26 @@ def generate_random_policy(env):
 
 
 # does value iteration for given policy, to be used in policy iteration
-def evaluate_values(env, policy, gamma, tolerance, q_function=False):
+def evaluate_values(
+    env: MazeEnvironment,
+    policy: dict,
+    gamma: float,
+    tolerance: float,
+    q_function: bool = False,
+) -> dict:
+    """
+    Evaluates the values (V or Q) for a given policy.
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        policy (dict): The policy to evaluate.
+        gamma (float): The discount factor.
+        tolerance (float): The convergence threshold.
+        q_function (bool, optional): Whether to evaluate Q-values instead of V-values. Defaults to False.
+
+    Returns:
+        dict: The evaluated values.
+    """
     values = init_q_values(env) if q_function else init_v_values(env)
     new_values = copy(values)
     if q_function:
@@ -507,11 +843,17 @@ def evaluate_values(env, policy, gamma, tolerance, q_function=False):
                     probs = env.get_action_probabilities(current_node, action)
                     next_node = env.get_next_node(probs)
                     if isinstance(next_node, TerminalNode):
-                        new_values[node_action, prob] = next_node.get_reward()  # if next is terminal value is just -1
+                        new_values[
+                            node_action, prob
+                        ] = (
+                            next_node.get_reward()
+                        )  # if next is terminal value is just -1
                     else:
                         next_action = policy[next_node.get_position()]
-                        new_values[node_action, prob] = next_node.get_reward() + gamma * values[
-                            next_node.get_position(), next_action]
+                        new_values[node_action, prob] = (
+                            next_node.get_reward()
+                            + gamma * values[next_node.get_position(), next_action]
+                        )
             err = max([abs(values[s] - new_values[s]) for s in values])
             if err < tolerance:
                 return new_values
@@ -527,7 +869,10 @@ def evaluate_values(env, policy, gamma, tolerance, q_function=False):
                     action = policy[node.get_position()]
                     probs = env.get_action_probabilities(node, action)
                     next_node = env.get_next_node(probs)
-                    new_values[node] = next_node.get_reward() + gamma * values[next_node.get_position()]
+                    new_values[node] = (
+                        next_node.get_reward()
+                        + gamma * values[next_node.get_position()]
+                    )
             err = max([abs(values[s] - new_values[s]) for s in values])
             if err < tolerance:
                 return new_values
@@ -535,10 +880,36 @@ def evaluate_values(env, policy, gamma, tolerance, q_function=False):
 
 
 def greedy_policy(env, values, gamma, q_function):
+    """
+    Generates a greedy policy based on the given values (V or Q).
+
+    Args:
+        env (MazeEnvironment): The maze environment.
+        values (dict): The values (V or Q) based on which the policy is to be generated.
+        gamma (float): The discount factor.
+        q_function (bool): Whether the values are Q-values.
+
+    Returns:
+        dict: The generated greedy policy.
+    """
     return generate_optimal_policy(env, values, gamma, q_function)
 
 
-def policy_iteration(env: MazeEnvironment, gamma, tolerance, q_function=False):
+def policy_iteration(
+    env: MazeEnvironment, gamma: float, tolerance: float, q_function: bool = False
+) -> dict:
+    """
+    Executes the policy iteration algorithm to find the optimal policy in the given maze environment.
+
+    Args:
+        env (MazeEnvironment): The maze environment on which the algorithm is run.
+        gamma (float): The discount factor.
+        tolerance (float): The threshold for determining convergence.
+        q_function (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
+
+    Returns:
+        dict: The optimal policy as a dictionary where keys are positions and values are actions.
+    """
     policy = generate_random_policy(env)
     while True:
         values = evaluate_values(env, policy, gamma, tolerance, q_function)
@@ -548,12 +919,12 @@ def policy_iteration(env: MazeEnvironment, gamma, tolerance, q_function=False):
         policy = new_policy
 
 
-'''
+"""
     Moze se isprobavati za razlicite dimenzije, ali paziti da akcija bude dovoljno malo
     jer ne moze na primer graf 2 puta 2 a 4 akcije, takva je implenetacija jer je naravljeno
     da svaki cvor ima prelaz na pola drugih cvorova. Odatle uslov da broj akcija ne sme biti
     veci od polovine ukupnog broja cvorova. Ogranicenje za vece grafove ne postoji.
-'''
+"""
 
 dims = (2, 3)
 
@@ -562,14 +933,18 @@ en = MazeEnvironment(dims)
 v, v_it = value_iteration(en, 0.9, 0.01)
 q, q_it = value_iteration(en, 0.9, 0.01, q_function=True)
 
-print("\n----------------------------------- FINISHED VALUE ITERATION ALGORITHMS ----------------------------------- ")
+print(
+    "\n----------------------------------- FINISHED VALUE ITERATION ALGORITHMS ----------------------------------- "
+)
 
 print(f"\nFinal V values on iteration {v_it}")
 print(v)
 print(f"\nFinal Q values on iteration {q_it}")
 print(q)
 
-print("\n---------------------------------- OPTIMAL POLICIES AFTER VALUE ITERATION --------------------------------- ")
+print(
+    "\n---------------------------------- OPTIMAL POLICIES AFTER VALUE ITERATION --------------------------------- "
+)
 
 optimal_pol_v = generate_optimal_policy(en, v, 0.9)
 print(f"\nOptimal policy after V iteration is:")
@@ -579,7 +954,9 @@ optimal_pol_q = generate_optimal_policy(en, q, 0.9, q_function=True)
 print(f"\nOptimal policy after Q iteration is:")
 print(optimal_pol_q)
 
-print("\n---------------------------------- OPTIMAL POLICIES AFTER POLICY ITERATION -------------------------------- ")
+print(
+    "\n---------------------------------- OPTIMAL POLICIES AFTER POLICY ITERATION -------------------------------- "
+)
 
 optimal_pol_pi_v = policy_iteration(en, 0.9, 0.01)
 print(f"\nOptimal policy after policy iteration using V is:")
