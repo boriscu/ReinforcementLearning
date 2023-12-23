@@ -971,34 +971,45 @@ def greedy_policy(env, values, gamma, q_function):
 
 
 def policy_iteration(
-    env: MazeEnvironment, gamma: float, tolerance: float, q_function: bool = False
+    env: MazeEnvironment,
+    gamma: float,
+    convergence_threshold: float,
+    use_q_values: bool = False,
 ) -> dict:
     """
     Executes the policy iteration algorithm to find the optimal policy in the given maze environment.
 
+    The algorithm iteratively evaluates a policy and improves it based on the current value estimates until it converges to an optimal policy.
+
     Args:
         env (MazeEnvironment): The maze environment on which the algorithm is run.
         gamma (float): The discount factor.
-        tolerance (float): The threshold for determining convergence.
-        q_function (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
+        convergence_threshold (float): The threshold for determining convergence.
+        use_q_values (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
 
     Returns:
         dict: The optimal policy as a dictionary where keys are positions and values are actions.
     """
-    policy = generate_random_policy(env)
+    current_policy = generate_random_policy(env)
     while True:
-        values = evaluate_values(env, policy, gamma, tolerance, q_function)
-        new_policy = greedy_policy(env, values, gamma, q_function)
-        if new_policy == policy:
-            return policy
-        policy = new_policy
+        value_estimates = evaluate_values(
+            env, current_policy, gamma, convergence_threshold, use_q_values
+        )
+        improved_policy = greedy_policy(env, value_estimates, gamma, use_q_values)
+
+        if improved_policy == current_policy:
+            return current_policy
+
+        current_policy = improved_policy
 
 
 """
-    Moze se isprobavati za razlicite dimenzije, ali paziti da akcija bude dovoljno malo
-    jer ne moze na primer graf 2 puta 2 a 4 akcije, takva je implenetacija jer je naravljeno
-    da svaki cvor ima prelaz na pola drugih cvorova. Odatle uslov da broj akcija ne sme biti
-    veci od polovine ukupnog broja cvorova. Ogranicenje za vece grafove ne postoji.
+    The algorithm can be tested with various maze dimensions, 
+    but it's important to ensure that the number of actions is appropriately small. 
+    For example, a 2x2 graph cannot have 4 actions, 
+    as the implementation is designed such that each node connects to half of the other nodes. 
+    Consequently, the number of actions must not exceed half of the total number of nodes. 
+    This limitation does not apply to larger graphs.
 """
 
 
@@ -1054,7 +1065,7 @@ print("\nOptimal policy after Q iteration is:")
 print(optimal_q_table)
 
 optimal_pol_pi_v = policy_iteration(en, 0.9, 0.01)
-optimal_pol_pi_q = policy_iteration(en, 0.9, 0.01, q_function=True)
+optimal_pol_pi_q = policy_iteration(en, 0.9, 0.01, use_q_values=True)
 
 # Policy iteration using V table
 pi_v_table = PrettyTable()
