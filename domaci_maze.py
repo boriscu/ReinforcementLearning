@@ -833,26 +833,31 @@ def greedy_action(
 
 
 def generate_optimal_policy(
-    env: MazeEnvironment, values: dict, gamma: float, q_function: bool = False
+    env: MazeEnvironment, values: dict, gamma: float, use_q_values: bool = False
 ) -> dict:
     """
     Generates the optimal policy for the maze environment based on the given value function or Q-values.
+
+    The policy is a mapping from each node's position to the best action determined by a greedy approach,
+    which maximizes the expected utility based on the current value estimates (V or Q values).
 
     Args:
         env (MazeEnvironment): The maze environment.
         values (dict): The dictionary of values (V or Q) used for determining the policy.
         gamma (float): The discount factor.
-        q_function (bool, optional): Whether the values are Q-values. Defaults to False.
+        use_q_values (bool, optional): Whether the values are Q-values. Defaults to False.
 
     Returns:
         dict: The optimal policy as a dictionary where keys are positions and values are actions.
     """
+    optimal_policy = {}
+    for node in env.get_graph():
+        if not (node.is_terminal() or not node.is_steppable()):
+            node_position = node.get_position()
+            best_action = greedy_action(env, node, values, gamma, use_q_values)
+            optimal_policy[node_position] = best_action
 
-    return {
-        node.get_position(): greedy_action(env, node, values, gamma, q_function)
-        for node in env.get_graph()
-        if not (node.is_terminal() or not node.is_steppable())
-    }
+    return optimal_policy
 
 
 def generate_random_policy(env: MazeEnvironment) -> dict:
@@ -1020,7 +1025,7 @@ print(f"\nFinal Q values on iteration {q_it}")
 print(q_table)
 
 optimal_pol_v = generate_optimal_policy(en, v, 0.9)
-optimal_pol_q = generate_optimal_policy(en, q, 0.9, q_function=True)
+optimal_pol_q = generate_optimal_policy(en, q, 0.9, use_q_values=True)
 
 # Optimal policy after V iteration table
 optimal_v_table = PrettyTable()
