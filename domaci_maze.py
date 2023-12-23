@@ -723,9 +723,9 @@ def async_update_all_values(
 def value_iteration(
     env: MazeEnvironment,
     gamma: float,
-    eps: float,
-    maxit: int = 100,
-    q_function: bool = False,
+    convergence_threshold: float,
+    max_iterations: int = 100,
+    use_q_function: bool = False,
 ) -> tuple:
     """
     Performs the value iteration algorithm on the maze environment.
@@ -733,22 +733,30 @@ def value_iteration(
     Args:
         env (MazeEnvironment): The maze environment on which the algorithm is run.
         gamma (float): The discount factor.
-        eps (float): The threshold for determining convergence.
-        maxit (int, optional): Maximum number of iterations. Defaults to 100.
-        q_function (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
+        convergence_threshold (float): The threshold for determining convergence.
+        max_iterations (int, optional): Maximum number of iterations. Defaults to 100.
+        use_q_function (bool, optional): Whether to use Q-function instead of value function. Defaults to False.
 
     Returns:
         tuple: A tuple containing the final values and the number of iterations it took to converge.
     """
-    values = init_q_values(env) if q_function else init_v_values(env)
-    for iteration in range(maxit):
-        values_copy = copy(values)
-        new_values = async_update_all_values(env, values, gamma, q_function)
-        err = max([abs(new_values[s] - values_copy[s]) for s in values])
-        if err < eps:
-            return new_values, iteration + 1
-        values = new_values
-    return values, iteration + 1
+    current_values = init_q_values(env) if use_q_function else init_v_values(env)
+    for iteration_number in range(max_iterations):
+        previous_values = copy(current_values)
+        updated_values = async_update_all_values(
+            env, current_values, gamma, use_q_function
+        )
+        max_error = max(
+            abs(updated_values[state] - previous_values[state])
+            for state in current_values
+        )
+
+        if max_error < convergence_threshold:
+            return updated_values, iteration_number + 1
+
+        current_values = updated_values
+
+    return current_values, iteration_number + 1
 
 
 def best_action_min_arg(actions_probs: list) -> int:
@@ -998,7 +1006,7 @@ dims = (3, 2)
 en = MazeEnvironment(dims)
 
 v, v_it = value_iteration(en, 0.9, 0.01)
-q, q_it = value_iteration(en, 0.9, 0.01, q_function=True)
+q, q_it = value_iteration(en, 0.9, 0.01, use_q_function=True)
 
 # V values table
 v_table = PrettyTable()
