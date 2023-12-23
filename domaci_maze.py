@@ -790,56 +790,46 @@ def greedy_action(
     current_node: Node,
     values: dict,
     gamma: float,
-    q_function: bool = False,
+    use_q_values: bool = False,
 ) -> int:
     """
     Determines the best action to take from the current node based on a greedy approach.
 
-    This function calculates the expected utility for each possible action from the current node and chooses the action that maximizes this expected utility. If 'q_function' is True, it uses Q-values for the calculation; otherwise, it uses V-values.
+    This function calculates the expected utility for each possible action from the current node and chooses the action that maximizes this expected utility. If 'use_q_values' is True, it uses Q-values for the calculation; otherwise, it uses V-values.
 
     Args:
         env (MazeEnvironment): The maze environment.
         current_node (Node): The current node from which the action is to be determined.
         values (dict): A dictionary containing the current estimated values (either V-values or Q-values).
         gamma (float): The discount factor.
-        q_function (bool, optional): Specifies whether to use Q-values (True) or V-values (False) in the calculations. Defaults to False.
+        use_q_values (bool, optional): Specifies whether to use Q-values (True) or V-values (False) in the calculations. Defaults to False.
 
     Returns:
         int: The action that maximizes the expected utility. Returns None if no action is found (e.g., in a terminal state).
     """
+    action_values = []
+    for action in ACTIONS:
+        expected_utility = 0
+        for next_node, transition_prob in env.get_action_probabilities(
+            current_node, action
+        ):
+            if use_q_values:
+                future_values = [
+                    values[next_node.get_position(), next_action]
+                    for next_action in ACTIONS
+                ]
+                best_future_value = max(future_values)
+            else:
+                best_future_value = values[next_node.get_position()]
 
-    if q_function:
-        action_values = []
-        for action in ACTIONS:
-            for next_node, prob in env.get_action_probabilities(current_node, action):
-                possible_values_one_node = []
-                for next_action in ACTIONS:
-                    possible_values_one_node.append(
-                        values[next_node.get_position(), next_action]
-                    )
-                action_values.append(
-                    (
-                        action,
-                        prob
-                        * (
-                            next_node.get_reward()
-                            + gamma * max(possible_values_one_node)
-                        ),
-                    )
-                )
-        return best_action_min_arg(action_values) if action_values else None
-        # return max(action_values, key=lambda x: x[1])[0] if action_values else None
-    else:
-        action_values = []
-        for action in ACTIONS:
-            temp = 0
-            for next_node, prob in env.get_action_probabilities(current_node, action):
-                temp += prob * (
-                    next_node.get_reward() + gamma * values[next_node.get_position()]
-                )
-            action_values.append((action, temp))
-        return best_action_min_arg(action_values) if max(action_values) != 0 else None
-        # return max(action_values, key=lambda x: x[1])[0] if max(action_values) != 0 else None
+            expected_utility += transition_prob * (
+                next_node.get_reward() + gamma * best_future_value
+            )
+
+        action_values.append((action, expected_utility))
+
+    # Determine the best action based on the calculated utilities
+    return best_action_min_arg(action_values) if action_values else None
 
 
 def generate_optimal_policy(
