@@ -419,7 +419,7 @@ class MazeEnvironment:
         Returns:
             Node: The selected next node based on the probabilities.
         """
-        probabilities = [pair[1] for pair in nodes_probs]
+        probabilities = [probability for _, probability in nodes_probs]
         index = np.random.choice(len(probabilities), p=probabilities)
         return nodes_probs[index][0]
 
