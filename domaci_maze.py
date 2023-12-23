@@ -411,17 +411,25 @@ class MazeEnvironment:
 
     def get_next_node(self, nodes_probs: list) -> Node:
         """
-        Selects the next node based on the given probabilities.
+        Selects the next node based on the given probabilities or returns a default node if probabilities are not available.
 
         Args:
             nodes_probs (list): A list of tuples (node, probability) representing the possible next nodes and their probabilities.
 
         Returns:
-            Node: The selected next node based on the probabilities.
+            Node: The selected next node based on the probabilities, or a default node if no valid probabilities are available.
         """
+        if not nodes_probs or not any(prob for _, prob in nodes_probs):
+            # Return the first node in the list as a default or another predefined node
+            return nodes_probs[0][0] if nodes_probs else self.get_default_node()
+
         probabilities = [probability for _, probability in nodes_probs]
         index = np.random.choice(len(probabilities), p=probabilities)
         return nodes_probs[index][0]
+
+    def get_default_node(self):
+        # Return the first node in the graph
+        return next(iter(self.get_graph()), None)
 
 
 def get_node_color(cell: Node) -> str:
@@ -583,8 +591,8 @@ def init_v_values(env: MazeEnvironment) -> dict:
         dict: A dictionary with positions as keys and initial V-values as values.
     """
     return {
-        s.get_position(): -20 * random() if not env.is_terminal(s) else 0
-        for s in env.get_graph()
+        node.get_position(): -20 * random() if not env.is_terminal(node) else 0
+        for node in env.get_graph()
     }
 
 
@@ -598,14 +606,14 @@ def init_q_values(env: MazeEnvironment) -> dict:
     Returns:
         dict: A dictionary with (position, action) tuples as keys and initial Q-values as values.
     """
-    q = {}
-    for s in env.get_graph():
+    q_values = {}
+    for node in env.get_graph():
         for action in ACTIONS:
-            if env.is_terminal(s):
-                q[s.get_position(), action] = 0
+            if env.is_terminal(node):
+                q_values[node.get_position(), action] = 0
             else:
-                q[s.get_position(), action] = -20 * random()
-    return q
+                q_values[node.get_position(), action] = -20 * random()
+    return q_values
 
 
 def update_v_value(
