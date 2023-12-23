@@ -631,16 +631,23 @@ def update_v_value(
     Returns:
         float: The updated V-value for the node.
     """
-    current_node = env.get_current_pos_node(position)
-    possible_values = []
+    node_at_position = env.get_current_pos_node(position)
+    action_values = []  # Stores the calculated value for each action
+
     for action in ACTIONS:
-        x = 0
-        for next_node, prob in env.get_action_probabilities(current_node, action):
-            x += prob * (
-                next_node.get_reward() + gamma * values[next_node.get_position()]
-            )
-        possible_values.append(x)
-    return max(possible_values) if max(possible_values) != 0 else -100  # wall node
+        value_for_action = 0
+        for next_node, transition_probability in env.get_action_probabilities(
+            node_at_position, action
+        ):
+            future_value = values[next_node.get_position()]
+            reward = next_node.get_reward()
+            value_for_action += transition_probability * (reward + gamma * future_value)
+
+        action_values.append(value_for_action)
+
+    # Choose the highest value among all possible actions
+    # If the node is a wall (all values are zero), return a specific value (e.g., -100)
+    return max(action_values) if max(action_values) != 0 else -100
 
 
 def update_q_value(
@@ -658,16 +665,24 @@ def update_q_value(
     Returns:
         float: The updated Q-value for the state-action pair.
     """
-    current_node = env.get_current_pos_node(state[0])
-    possible_values = []
-    for next_node, prob in env.get_action_probabilities(current_node, state[1]):
-        possible_values_one_node = []
-        for action in ACTIONS:
-            possible_values_one_node.append(values[next_node.get_position(), action])
-        possible_values.append(
-            prob * (next_node.get_reward() + gamma * max(possible_values_one_node))
-        )
-    return sum(possible_values) if possible_values else -100  # wall node
+    node_at_state = env.get_current_pos_node(state[0])
+    action_value_contributions = []
+
+    for next_node, transition_prob in env.get_action_probabilities(
+        node_at_state, state[1]
+    ):
+        future_values = [
+            values[next_node.get_position(), next_action] for next_action in ACTIONS
+        ]
+        best_future_value = max(future_values)
+        reward = next_node.get_reward()
+
+        value_contribution = transition_prob * (reward + gamma * best_future_value)
+        action_value_contributions.append(value_contribution)
+
+    # Sum the contributions from all possible transitions
+    # If no possible transitions (e.g., wall node), return a specific value (e.g., -100)
+    return sum(action_value_contributions) if action_value_contributions else -100
 
 
 def async_update_all_values(
@@ -685,14 +700,24 @@ def async_update_all_values(
     Returns:
         dict: The updated values after one iteration.
     """
-    for s in values:
+    for state_action_pair in values:
         if q_function:
-            if not env.is_terminal_pos(s[0]):  # q values are (position,action)
-                values[s] = update_q_value(env, s, values, gamma)
+            # When updating Q-values, check if the current position is not terminal
+            if not env.is_terminal_pos(
+                state_action_pair[0]
+            ):  # state_action_pair is (position, action)
+                values[state_action_pair] = update_q_value(
+                    env, state_action_pair, values, gamma
+                )
         else:
-            if not env.is_terminal_pos(s):
-                values[s] = update_v_value(env, s, values, gamma)
-    return copy(values)
+            # When updating V-values, the state is just the position
+            position = (
+                state_action_pair  # Here, state_action_pair is actually just a position
+            )
+            if not env.is_terminal_pos(position):
+                values[position] = update_v_value(env, position, values, gamma)
+
+    return values
 
 
 def value_iteration(
