@@ -1,4 +1,3 @@
-import math
 import random as rdm
 from abc import ABC, abstractmethod
 from copy import copy
@@ -6,7 +5,7 @@ from copy import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-from random import random
+from random import random, choice
 
 import networkx as nx
 from prettytable import PrettyTable
@@ -169,37 +168,31 @@ class MazeEnvironment:
             dict: The graph representing the maze, where keys are node objects and values are lists of connected nodes with probabilities.
         """
         graph = {}
-        terminal = 0  # flag for terminal node
+        terminal_node_created = False
 
-        # initialization of graph
         for w in range(1, width + 1):
             for h in range(1, height + 1):
                 node = self.generate_random_node(w, h)
                 graph[node] = []
 
                 if isinstance(node, TerminalNode):
-                    terminal += 1
-        """
-            If there is no terminal node in random graph, it is manually made, but not from wall node
-            because that would mean none of the other nodes would have probability different than zero
-            to step on it ( which is characteristic of WallNode ).
-        """
-        if not terminal:
-            graph_list = list(graph)
-            random_node = self.random_not_wall(graph_list)
-            terminal_node = TerminalNode(
-                -1, random_node.get_position()[0], random_node.get_position()[1]
-            )
-            graph.pop(random_node)
+                    terminal_node_created = True
+
+        # If no terminal node was created, randomly select a non-wall node to convert to a terminal node
+        if not terminal_node_created:
+            non_wall_nodes = [n for n in graph.keys() if not isinstance(n, WallNode)]
+            node_to_replace = choice(non_wall_nodes)
+            terminal_node = TerminalNode(-1, node_to_replace.x, node_to_replace.y)
+            graph.pop(node_to_replace)
             graph[terminal_node] = []
 
-        # for all other nodes, probabilities are randomly generated
+        # Set probabilities for transitions between nodes
         for node in graph:
             graph[node] = self.set_probabilities(node, graph)
 
         return graph
 
-    def set_probabilities(self, node: Node, g: dict) -> list:
+    def set_probabilities(self, node: Node, graph: dict) -> list:
         """
         Sets and returns the movement probabilities for the given node to other nodes in the graph.
 
@@ -210,71 +203,33 @@ class MazeEnvironment:
         Returns:
             list: A list of probabilities for moving from the given node to other nodes.
         """
-        # terminal and wall node do not have any probabilities
-        if isinstance(node, WallNode) or isinstance(node, TerminalNode):
+        # Terminal and wall node do not have any probabilities
+        if isinstance(node, (WallNode, TerminalNode)):
             return []
 
-        # list is easier to iterate, only because of that is node_list made
-        nodes_list = [node for node in g]
-        nodes_list_help = copy(nodes_list)  # only for iteration
-
+        nodes_list = [n for n in graph if not isinstance(n, WallNode)]
         probabilities = []
 
+        # Calculate the number of non-wall nodes that should have zero probability
         total_cells = self.graph_width * self.graph_height
-        zero_cells = total_cells // 2  # number of cells with zero prob of stepping
+        zero_cells = min(len(nodes_list), total_cells // 2)
 
-        # probability is set to zero for wall modes
-        for n in nodes_list_help:
-            if isinstance(n, WallNode):
-                probabilities.append([0, n, 0])
-                zero_cells -= 1
-                nodes_list.remove(n)
+        # Assign zero probability to a subset of non-wall nodes
+        for _ in range(zero_cells):
+            random_node = rdm.choice(nodes_list)
+            nodes_list.remove(random_node)
+            probabilities.append([0, random_node, 0])
 
-        # for regular nodes, half of probabilities should be zero, including wall nodes
-        if isinstance(node, RegularNode):
-            while zero_cells != 0:
-                random_node = rdm.choice(nodes_list)
-                nodes_list.remove(random_node)
-                probabilities.append([0, random_node, 0])
-                zero_cells -= 1
+        # Distribute the remaining nodes among the actions
+        for action in ACTIONS:
+            if nodes_list:
+                action_len = len(nodes_list) // len(ACTIONS) or 1
+                nodes_for_action = nodes_list[:action_len]
+                nodes_list = nodes_list[action_len:]
 
-        # number of nodes that can be reached with one action
-        # action_len = math.ceil(len(nodes_list) / len(ACTIONS))
-        if len(nodes_list) / len(ACTIONS) > 1.5:
-            action_len = math.ceil(len(nodes_list) / len(ACTIONS))
-        else:
-            action_len = math.floor(len(nodes_list) / len(ACTIONS))
-
-        # shuffle actions
-        random_actions = ACTIONS
-        rdm.shuffle(random_actions)
-        actions_copy = copy(random_actions)  # actions yet to be processed
-
-        for action in random_actions:
-            #  when it's the last action, all the left nodes are connected to the last action
-            if len(actions_copy) == 1:
-                nodes_for_current_action = nodes_list
-            else:
-                nodes_for_current_action = rdm.sample(nodes_list, action_len)
-                for n in nodes_for_current_action:
-                    nodes_list.remove(n)
-
-            # generates probabilities with sum of 1
-            non_zero_probabilities_action = self.generate_probabilities(
-                nodes_for_current_action
-            )
-
-            # appends (action, next_node, prob)
-            for i in range(len(nodes_for_current_action)):
-                probabilities.append(
-                    [
-                        action,
-                        nodes_for_current_action[i],
-                        non_zero_probabilities_action[i],
-                    ]
-                )
-
-            actions_copy.remove(action)  # removes processed action
+                non_zero_probabilities = self.generate_probabilities(nodes_for_action)
+                for node, prob in zip(nodes_for_action, non_zero_probabilities):
+                    probabilities.append([action, node, prob])
 
         return probabilities
 
