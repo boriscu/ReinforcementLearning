@@ -876,13 +876,12 @@ def generate_random_policy(env: MazeEnvironment) -> dict:
     return policy
 
 
-# does value iteration for given policy, to be used in policy iteration
 def evaluate_values(
     env: MazeEnvironment,
     policy: dict,
     gamma: float,
-    tolerance: float,
-    q_function: bool = False,
+    convergence_threshold: float,
+    use_q_values: bool = False,
 ) -> dict:
     """
     Evaluates the values (V or Q) for a given policy.
@@ -891,62 +890,68 @@ def evaluate_values(
         env (MazeEnvironment): The maze environment.
         policy (dict): The policy to evaluate.
         gamma (float): The discount factor.
-        tolerance (float): The convergence threshold.
-        q_function (bool, optional): Whether to evaluate Q-values instead of V-values. Defaults to False.
+        convergence_threshold (float): The convergence threshold.
+        use_q_values (bool, optional): Whether to evaluate Q-values instead of V-values. Defaults to False.
 
     Returns:
         dict: The evaluated values.
     """
-    values = init_q_values(env) if q_function else init_v_values(env)
-    new_values = copy(values)
-    if q_function:
-        while True:
-            # node_action is (s,a) tuple
-            for node_action, prob in values:
-                current_node = env.get_current_pos_node(node_action)
-                if isinstance(current_node, WallNode):
-                    new_values[node_action, prob] = -100
-                elif isinstance(current_node, TerminalNode):
-                    new_values[node_action, prob] = 0
-                else:
-                    action = policy[current_node.get_position()]
-                    probs = env.get_action_probabilities(current_node, action)
-                    next_node = env.get_next_node(probs)
-                    if isinstance(next_node, TerminalNode):
-                        new_values[
-                            node_action, prob
-                        ] = (
-                            next_node.get_reward()
-                        )  # if next is terminal value is just -1
-                    else:
-                        next_action = policy[next_node.get_position()]
-                        new_values[node_action, prob] = (
-                            next_node.get_reward()
-                            + gamma * values[next_node.get_position(), next_action]
-                        )
-            err = max([abs(values[s] - new_values[s]) for s in values])
-            if err < tolerance:
-                return new_values
-            values = new_values
-    else:
-        while True:
-            for node in env.get_graph():
-                if isinstance(node, WallNode):
-                    new_values[node.get_position()] = -100
-                elif isinstance(node, TerminalNode):
-                    new_values[node.get_position()] = 0
-                else:
-                    action = policy[node.get_position()]
-                    probs = env.get_action_probabilities(node, action)
-                    next_node = env.get_next_node(probs)
-                    new_values[node] = (
-                        next_node.get_reward()
-                        + gamma * values[next_node.get_position()]
+    current_values = init_q_values(env) if use_q_values else init_v_values(env)
+    updated_values = copy(current_values)
+
+    while True:
+        for state in current_values:
+            node = env.get_current_pos_node(state[0] if use_q_values else state)
+
+            if isinstance(node, WallNode):
+                updated_values[state] = -100
+            elif isinstance(node, TerminalNode):
+                updated_values[state] = 0
+            else:
+                chosen_action = policy[node.get_position()]
+                transition_probs = env.get_action_probabilities(node, chosen_action)
+
+                if use_q_values:
+                    update_state_value_q(
+                        state, updated_values, transition_probs, gamma, policy
                     )
-            err = max([abs(values[s] - new_values[s]) for s in values])
-            if err < tolerance:
-                return new_values
-            values = new_values
+                else:
+                    update_state_value_v(state, updated_values, transition_probs, gamma)
+
+        max_error = max(
+            abs(updated_values[s] - current_values[s]) for s in current_values
+        )
+        if max_error < convergence_threshold:
+            return updated_values
+
+        current_values = updated_values
+
+
+def update_state_value_q(state, values, transition_probs, gamma, policy):
+    """
+    Helper function to update state value for Q-learning.
+    """
+    for next_node, prob in transition_probs:
+        if isinstance(next_node, TerminalNode):
+            values[state] = next_node.get_reward()
+        else:
+            next_action = policy[next_node.get_position()]
+            values[state] = (
+                next_node.get_reward()
+                + gamma * values[next_node.get_position(), next_action]
+            )
+
+
+def update_state_value_v(state, values, transition_probs, gamma):
+    """
+    Helper function to update state value for value iteration.
+    """
+    value_sum = 0
+    for next_node, prob in transition_probs:
+        value_sum += prob * (
+            next_node.get_reward() + gamma * values[next_node.get_position()]
+        )
+    values[state] = value_sum
 
 
 def greedy_policy(env, values, gamma, q_function):
@@ -997,7 +1002,7 @@ def policy_iteration(
 """
 
 
-dims = (3, 2)
+dims = (3, 3)
 en = MazeEnvironment(dims)
 
 v, v_it = value_iteration(en, 0.9, 0.01)
