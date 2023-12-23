@@ -390,6 +390,10 @@ class MazeEnvironment:
         """
         Returns a list of tuples containing the next node and the probability of reaching it for a given action from the given node.
 
+        The action is an integer representing a specific kind of move or decision the agent can make from the current node.
+        The probabilities are extracted from the graph structure where each node key maps to a list of tuples representing
+        possible actions, their corresponding next nodes, and the probabilities of transitioning to those nodes.
+
         Args:
             node (Node): The node from which the action is taken.
             action (int): The action to be taken.
@@ -397,7 +401,13 @@ class MazeEnvironment:
         Returns:
             list: A list of tuples (next_node, probability) for the given action.
         """
-        return [(pair[1], pair[2]) for pair in self.graph[node] if pair[0] == action]
+        action_probabilities = []
+        for transition in self.graph[node]:
+            transition_action, next_node, probability = transition
+            if transition_action == action:
+                action_probabilities.append((next_node, probability))
+
+        return action_probabilities
 
     def get_next_node(self, nodes_probs: list) -> Node:
         """
