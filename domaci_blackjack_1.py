@@ -243,6 +243,17 @@ def get_init_states(deck: CardDeck, debug: bool = False) -> (State, State):
     return player1_state, player2_state
 
 
+def all_states() -> list[State]:
+    """Create a list of all possible Blackjack states."""
+    states = []
+    for total in range(2, 22):
+        for dealer_value in range(2, 12):
+            states.append(State(total, False, dealer_value))
+            if total >= 11:
+                states.append(State(total, True, dealer_value))
+    return states
+
+
 class Action(Enum):
     """Blackjack action."""
 
@@ -467,6 +478,61 @@ def play_game(
     return game_result, player1_experience, player2_experience
 
 
+@dataclass
+class PolicyTestingResult:
+    games_no: int
+    score: int
+    wins: float
+    draws: float
+    losses: float
+
+    def loss_per_game(self):
+        """Average loss per game."""
+        return self.score / self.games_no
+
+    def __repr__(self):
+        return f"total score={self.score}/{self.games_no} games ({self.loss_per_game():.4f} per game) :: W {self.wins*100:.2f}% | D {self.draws*100:.2f}% | L {self.losses*100:.2f}%"
+
+
+def apply_policy_exhaustive(
+    policy1: Policy, policy2: Policy, deck: CardDeck, epoch_no=5, gamma=1
+) -> tuple[PolicyTestingResult, PolicyTestingResult]:
+    wins1, losses1, draws1, score1, games_no1 = 0, 0, 0, 0, 0
+    wins2, losses2, draws2, score2, games_no2 = 0, 0, 0, 0, 0
+
+    for _ in range(epoch_no):
+        res, exp_player1, exp_player2 = play_game(policy1, policy2, deck, gamma=gamma)
+
+        # Update scores and counts for Player 1
+        games_no1 += 1
+        if res == 1:
+            wins1 += 1
+        elif res == 0:
+            draws1 += 1
+        else:
+            losses1 += 1
+        score1 += res
+
+        # Update scores and counts for Player 2
+        games_no2 += 1
+        if res == -1:
+            wins2 += 1
+        elif res == 0:
+            draws2 += 1
+        else:
+            losses2 += 1
+        score2 -= res  # Negative because a win for Player 1 is a loss for Player 2
+
+    result1 = PolicyTestingResult(
+        games_no1, score1, wins1 / games_no1, draws1 / games_no1, losses1 / games_no1
+    )
+    result2 = PolicyTestingResult(
+        games_no2, score2, wins2 / games_no2, draws2 / games_no2, losses2 / games_no2
+    )
+
+    return result1, result2
+
+
 GainsDict = dict[State, tuple[list[float], list[float]]]
 
 
@@ -539,6 +605,51 @@ def update_Q(q_dict: QDict, experience: Experience, alpha=0.1):
     return q_dict
 
 
+def visualize_policy(policy):
+    """Visualize the policy.
+
+    The policy will be visualized using a colored greed.
+    The horizontal axis will correspond to the player total and the vertical axis to the
+    dealer's total.
+
+    If a cell is colored in red, it means that the action is HIT, regardless of existence of usable ACE.
+    If a cell is colored in blue, it means HOLD, regardless of existence of usable ACE.
+    Green cells are those in which HIT will be played only if there is a usable ACE.
+    Black cells are those in which HIT will be played only if there is no usable ACE.
+
+    Since the last case (play HIT if there is no usable ACE, and HOLD otherwise) seems counterintutive,
+    the color black is selected to distinguish it from other states.
+    """
+    player_values = list(range(2, 21))
+    dealer_values = list(range(2, 12))
+    board = np.ones(shape=(len(dealer_values), len(player_values), 3), dtype=np.uint8)
+    for r, dv in enumerate(dealer_values):
+        for c, pv in enumerate(player_values):
+            if pv < 11:
+                action_t = policy(State(pv, False, dv)) == Action.HIT
+                if action_t:
+                    board[r, c, :] = (255, 0, 0)
+                else:
+                    board[r, c, :] = (0, 0, 255)
+            else:
+                action_t = policy(State(pv, True, dv)) == Action.HIT
+                action_f = policy(State(pv, False, dv)) == Action.HIT
+                if action_t and action_f:
+                    board[r, c, :] = (255, 0, 0)
+                elif action_t and not action_f:
+                    board[r, c, :] = (0, 255, 0)
+                elif not action_t and not action_f:
+                    board[r, c, :] = (0, 0, 255)
+                else:
+                    board[r, c, :] = (0, 0, 0)
+    plt.imshow(board, extent=[2, 21, 12, 2])
+    plt.xticks(np.arange(2.5, 21.5, 1), np.arange(2, 21, 1))
+    plt.yticks(np.arange(2.5, 12.5, 1), np.arange(2, 12, 1))
+    plt.xlabel("player total")
+    plt.ylabel("dealer total")
+    plt.show()
+
+
 def main(debug: bool = False):
     deck = CardDeck()
 
@@ -577,23 +688,59 @@ def main(debug: bool = False):
 
     q_dict_player1 = dict()
     q_dict_player2 = dict()
-    alpha = 0.1
-    gamma = 0.9
-    number_of_games = 1000
-    number_of_epochs = 10
-    for epoch in range(number_of_epochs):
+    q_dict_best_player1 = dict()
+    q_dict_best_player2 = dict()
+    res_best_player1 = -float("inf")
+    res_best_player2 = -float("inf")
+
+    for _ in trange(10000):
+        # Create greedy policies for both players
         policy_player1 = create_greedy_policy(q_dict_player1)
         policy_player2 = create_greedy_policy(q_dict_player2)
 
-        # Play games and collect experiences for both players
-        for _ in range(number_of_games):
-            _, exp_player1, exp_player2 = play_game(
-                policy_player1, policy_player2, deck, gamma=gamma
-            )
+        # Play games and update policies
+        _, exp_player1, exp_player2 = play_game(
+            policy_player1, policy_player2, deck, gamma=0.9
+        )
+        q_dict_player1 = update_Q(q_dict_player1, exp_player1, alpha=0.1)
+        q_dict_player2 = update_Q(q_dict_player2, exp_player2, alpha=0.1)
 
-            # Update Q-values for both players
-            q_dict_player1 = update_Q(q_dict_player1, exp_player1, alpha=alpha)
-            q_dict_player2 = update_Q(q_dict_player2, exp_player2, alpha=alpha)
+        # Evaluate policies after each epoch
+        res_player1, res_player2 = apply_policy_exhaustive(
+            policy_player1, policy_player2, deck
+        )
+
+        # Update the best result and Q-dictionary for each player
+        if res_player1.score > res_best_player1:
+            q_dict_best_player1 = deepcopy(q_dict_player1)
+            res_best_player1 = res_player1.score
+        if res_player2.score > res_best_player2:
+            q_dict_best_player2 = deepcopy(q_dict_player2)
+            res_best_player2 = res_player2.score
+
+    # Retrieve the best policies for final evaluation
+    final_policy_player1 = create_greedy_policy(q_dict_best_player1)
+    final_policy_player2 = create_greedy_policy(q_dict_best_player2)
+
+    # Evaluate final policies for both players
+    final_res_player1, final_res_player2 = apply_policy_exhaustive(
+        final_policy_player1,
+        final_policy_player2,
+        deck,
+        epoch_no=10000,  # More comprehensive evaluation
+    )
+
+    # Print final evaluation results
+    print("Final Policy Evaluation Player 1:")
+    print(final_res_player1)
+    print("Final Policy Evaluation Player 2:")
+    print(final_res_player2)
+
+    # Visualize final policies
+    print("Visualizing Final Policy for Player 1:")
+    visualize_policy(final_policy_player1)
+    print("Visualizing Final Policy for Player 2:")
+    visualize_policy(final_policy_player2)
 
 
 # Execute the main function
