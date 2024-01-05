@@ -1,67 +1,4 @@
-'''
-We consider a slightly simplified version of blackjack in which a player plays against the dealer. Both agents (player and dealer) start with a single card. 
-The player first take his turns, and then (once the player is finished) the dealer may play (unless the player was busted, in which case the dealer authomatically wins,
-and need not play).
-
-In each turn, an agent may choose two actions: HIT or HOLD. By choosing HIT, the agent is asking for one more card from the deck. By choosing HOLD, 
-the agent finishes his turn without drawing an additional card.
-
-The agent total is the sum of values of all cards the agent has drawn, including the initial card handed to it on the start of the game. 
-The "small cards" (2, 3, 4, ..., 9, 10) have the value equal to their number. The "face cards" (J, Q, K) have value 10. 
-Ace (A) can have two values: 1 or 11, depending on the choice of the agent.
-
-THE GOAL OF THE GAME IS TO HAVE THE HIGHEST TOTAL NOT BIGGER THAN 21. If an agent achieves the total bigger than 21 it losses the game 
-(we say that the agent is busted in this case). More precisely:
-
-If the player is busted, dealer wins.
-If the players is not busted, then:
-If the dealer is busted, player wins.
-If the dealer is not busted, the agent with the highest total wins.
-In case that neither agent is busted, and both have the same total, the game is draw.
-Upon playing each game, the wining agent receives reward +1, the losing agent receives -1. If the game is draw, both agents receive 0. 
-The reward is given only when the game is over. No reward is received after non-terminating actions (the reward following those actions is 0).
-
-We now proceede to implement the state of a blackjack game, as well as different policies.
-
-From the position of a player, the state of a blackjack game is defined by the list of all cards it has previously drawn 
-(including the card that was initially given to it) and also the card in the posession of the dealer. However, 
-the state defined in such a way actually contains more information than is needed to form a decission. It is sufficient to know:
-- the current player total;
-- if this total is created using an ACE which can be converted to 1, if needed; and
-- the value of the dealer's card
-
-Another usefull function will be the one that generates a random state. A valid Blackjack state is any in which the player total is between 2 and 21 
-(1 is never the total, since it could only happen by having a single ACE, which would be counted by 11). ACE indication can be True only if the total 
-is bigger or equal to 11. Further, since the dealer has only one card during a player's turn, possible card values are between 2 and 11.
-
-Using a Policy: Playing an Entire Turn (of a Player or a Dealer)
-We now proceed to implement a single turn. This will be used to identify a sequence of HIT actions of a single agent, starting from some given initial state until a 
-HOLD action is selected, or the total excedes 21. One Blackjack game (the way we are playing it here) consists of two turns: the player's turn and the dealer's turn. 
-So, once we implement the turn, we will be able to implement a single game. A path to implementing a learning agent will then be completely set.
-
-In general, we will be "playing" games in several different scenarios. In cases we are learning, we will be interested in "playing" many (thousands and tens 
-of thousands) of games silently. In other cases, particularly during testing and demonstration, we will be interested in carefully tracing each event within a single game.
-
-Another interesting point to note is that we will wish to "play" games starting from different initial states. During learning, it will be of interest to choose 
-the initial state completely randomly. During demonstration, it will be more interesting to have the game start in the usual way: by drawing a card from the deck
-for the player and another card from the deck for the dealer. For this reason, the get_init_state function allows for the state argument to be specified in three
-different ways:
-
-as a State object, in which case this object is returned as the initial state
-as a string "random", in which case a state is drawn completely randomly from the set of all possible states
-as None, in which case the initial state is generated in the same way the game is actually played (by drawing cards from the deck: one for the player and one for the dealer)
-
-Incremental Learning
-A big problem with "naive" Monte Carlo approaches, as the one used until now is that -- as soon as we collect new experience and update the policy -- 
-we essentially discard and forget all that has been learned before. All previous experience is essentially wasted, and we are hoping that each inter-update 
-epoch will be rich enough.
-
-What we would like instead is that we accumulate new knowledge along the way and to update our existing assesments of the Q-values. In order to do so, let us first 
-implement a function that updates an existing estimate of a state-action value given a new gain value attained starting from the given state and applying the given 
-initial action.
-'''
-
-'''
+"""
 Level 3
 Make the game symmetric in the following way: Instead of the Player and the Dealer, let us talk about Player 1 and Player 2.
 
@@ -74,7 +11,7 @@ or chooses HOLD. At the end, the player with highest sum less than 21 wins the r
 
 Upon completion of the round, each player receives +1, 0, or -1, depending on the outcome. The total outgome of one game is the sum of 
 outcomes of the two rounds.
-'''
+"""
 from enum import Enum
 from dataclasses import dataclass, astuple
 from typing import Callable
@@ -87,9 +24,10 @@ from rich import print
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class CardSuit(Enum):
     """An enumeration representing card suits."""
-    
+
     DIAMONDS = 0
     CLUBS = 1
     HEARTS = 2
@@ -105,6 +43,7 @@ class CardSuit(Enum):
                 return "♥"
             case CardSuit.SPADES:
                 return "♠"
+
 
 class CardValue(Enum):
     """An enumeration representing card values."""
@@ -134,15 +73,18 @@ class CardValue(Enum):
             return "D"
         elif self == CardValue.KING:
             return "K"
-        
+
+
 @dataclass
 class Card:
     """A playing card."""
+
     value: CardValue
     suit: CardSuit
 
     def __repr__(self):
         return f"{repr(self.value)}{repr(self.suit)}"
+
 
 class CardDeck:
     """A deck of cards.
@@ -153,14 +95,14 @@ class CardDeck:
 
     def reshuffle(self):
         """Refill the deck with all playing cards and reshuffle it."""
-        self.cards = self.multiplicity * [Card(value=v, suit=s) 
-                                          for v in iter(CardValue) 
-                                          for s in iter(CardSuit)]
-        np.random.shuffle(self.cards) 
+        self.cards = self.multiplicity * [
+            Card(value=v, suit=s) for v in iter(CardValue) for s in iter(CardSuit)
+        ]
+        np.random.shuffle(self.cards)
 
     def __init__(self, multiplicity=5):
         """Create a shuffled deck of cards.
-        
+
         Args:
             multiplicity (int): The number of 52-card sets to put inside a deck.
         """
@@ -177,9 +119,11 @@ class CardDeck:
             self.reshuffle()
         return self.cards.pop(0)
 
+
 @dataclass
 class State:
     """The state of a Blackjack game"""
+
     total: int
     has_ace: bool
     dealer_total: int
@@ -190,9 +134,10 @@ class State:
     def __repr__(self):
         return repr(astuple(self))
 
+
 def update_total(total: int, has_ace: bool, card_value: CardValue) -> tuple[int, bool]:
     """Update (a portion of) the player state by taking account a newly drawn card.
-    
+
     Given the information regarding the current player state (total and ACE info), and the
     value of a newly drawn card, updates the current player state (both total and ACE info).
 
@@ -217,12 +162,12 @@ def update_total(total: int, has_ace: bool, card_value: CardValue) -> tuple[int,
             # We can keep the ACE as 11.
             # Notice that it was impossible that we had another ACE in posession
             # before (since in that case the total would surely be bigger than 21)
-            return (total+11, True)
+            return (total + 11, True)
         else:
             # The total excedes 21, and we must count the ACE as 1.
             # It is possible we had another active ACE before, if so the
             # status of this old ACE does not change.
-            return (total+1, has_ace)
+            return (total + 1, has_ace)
     else:
         total += min(card_value.value, 10)
         if total > 21:
@@ -239,10 +184,11 @@ def update_total(total: int, has_ace: bool, card_value: CardValue) -> tuple[int,
         # The total is less than 21, we may return the state as is.
         return (total, has_ace)
 
+
 def random_state() -> State:
     """Generate a random state."""
     total = randint(2, 21)
-    if total>= 11:
+    if total >= 11:
         r = random()
         if r >= 0.5:
             has_ace = True
@@ -252,6 +198,50 @@ def random_state() -> State:
         has_ace = False
     dealer_value = randint(2, 11)
     return State(total, has_ace, dealer_value)
+
+
+def get_init_state(
+    state: State | str | None,
+    deck: CardDeck,
+    common_card: Card | None,
+    debug: bool = False,
+) -> State:
+    """Generate initial state."""
+    if state is None:
+        player_card = deck.draw()
+        total, has_ace = update_total(0, False, player_card.value)
+        if common_card is None:
+            raise ValueError("Common card cannot be None")
+
+        common_card_value = min(common_card.value.value, 10)
+        if debug:
+            print(f"Player initial hand: {player_card}, {common_card}")
+        return State(total, has_ace, common_card_value)
+    else:
+        if isinstance(state, str):
+            assert state == "random", f"Invalid init state specification: '{state}'"
+            return random_state()
+        else:
+            return state
+
+
+def get_init_states(deck: CardDeck, debug: bool = False) -> (State, State):
+    # Draw the common card and print it
+    common_card = deck.draw()
+
+    # Initialize state for Player 1
+    player1_state = get_init_state(None, deck, common_card, debug)
+    player1_state.total, player1_state.has_ace = update_total(
+        player1_state.total, player1_state.has_ace, common_card.value
+    )
+
+    # Initialize state for Player 2
+    player2_state = get_init_state(None, deck, common_card, debug)
+    player2_state.total, player2_state.has_ace = update_total(
+        player2_state.total, player2_state.has_ace, common_card.value
+    )
+    return player1_state, player2_state
+
 
 def all_states() -> list[State]:
     """Create a list of all possible Blackjack states."""
@@ -263,13 +253,16 @@ def all_states() -> list[State]:
                 states.append(State(total, True, dealer_value))
     return states
 
+
 class Action(Enum):
     """Blackjack action."""
+
     HIT = 0
     HOLD = 1
 
     def __repr__(self):
         return "HIT" if self == Action.HIT else "HOLD"
+
 
 def random_action() -> Action:
     """Return random action."""
@@ -279,34 +272,17 @@ def random_action() -> Action:
     else:
         return Action.HOLD
 
-Policy = Callable[[State], Action]
 
 def random_policy(s: State) -> Action:
     return random_action()
 
-def dealer_policy(s: State) -> Action:
-    total, has_ace, _ = astuple(s)
-    if total < 17:
-        return Action.HIT
-    else:
-        return Action.HOLD
 
-def get_init_state(state: State | str | None, deck: CardDeck) -> State:
-    """Generate initial state."""
-    if state is None:
-        player_card = deck.draw()
-        total, has_ace = update_total(0, False, player_card.value)
-        dealer_card = deck.draw()
-        dealer_value = min(dealer_card.value.value, 10)
-        return State(total, has_ace, dealer_value)
-    else:
-        if isinstance(state, str):
-            assert state == "random", f"Invalid init state specification: '{state}'"
-            return random_state()
-        else:
-            return state
-    
-def get_init_action(action: Action | str | None, state: State, policy: Policy) -> Action:
+Policy = Callable[[State], Action]
+
+
+def get_init_action(
+    action: Action | str | None, state: State, policy: Policy
+) -> Action:
     """Generate initial action."""
     if action is not None:
         if isinstance(action, str):
@@ -317,14 +293,18 @@ def get_init_action(action: Action | str | None, state: State, policy: Policy) -
     else:
         return policy(state)
 
+
 TurnLog = list[tuple[State, Action]]
 ReportCallback = Callable[[str], None]
 
-def play_turn(policy: Policy, 
-              deck: CardDeck, 
-              init_state: State | None = None,
-              init_action: Action | None = None, 
-              report_callback: ReportCallback | None = None) -> tuple[int | None, TurnLog]:
+
+def play_turn(
+    policy: Policy,
+    deck: CardDeck,
+    init_state: State | None = None,
+    init_action: Action | None = None,
+    report_callback: ReportCallback | None = None,
+) -> tuple[int | None, TurnLog]:
     """A single playing turn of an agent.
 
     Args:
@@ -342,11 +322,13 @@ def play_turn(policy: Policy,
         TurnLog: sequence of states and actions observed during gameplay
     """
     report = lambda txt: report_callback and report_callback(txt)
-    state = get_init_state(init_state, deck)
+    state = get_init_state(init_state, deck, None)
     action = get_init_action(init_action, state, policy)
     total, has_ace, dealer_value = astuple(state)
     report(f"[bold]initial state[/] {state}")
-    report(f"initial total {total} with ACE {has_ace} => [bold]initial action[/] {action}")
+    report(
+        f"initial total {total} with ACE {has_ace} => [bold]initial action[/] {action}"
+    )
     turn_log = [(state, action)]
     while action == Action.HIT:
         card = deck.draw()
@@ -355,21 +337,53 @@ def play_turn(policy: Policy,
         if total > 21:
             # Since total is above 21, the state is not valid and should not
             # be logged!
-            report(f"turned finished - [bold]BUSTED![/] card drawn {card} => total {total} with ACE {has_ace}")
+            report(
+                f"turned finished - [bold]BUSTED![/] card drawn {card} => total {total} with ACE {has_ace}"
+            )
             return None, turn_log
         else:
             action = policy(state)
             turn_log.append((state, action))
-            report(f"card drawn {card} => total {total} with ACE {has_ace} => action chosen {action}")
+            report(
+                f"card drawn {card} => total {total} with ACE {has_ace} => action chosen {action}"
+            )
     report(f"turn finished with final total {total}")
     return total, turn_log
 
+
 Experience = tuple[State, Action, float]
+
+
+def compare_totals(player1_total, player2_total) -> int:
+    # Check for busts
+    player1_bust = player1_total is None or player1_total > 21
+    player2_bust = player2_total is None or player2_total > 21
+
+    # Both players bust
+    if player1_bust and player2_bust:
+        return 0  # Draw
+
+    # Only Player 1 busts
+    if player1_bust:
+        return -1  # Player 2 wins
+
+    # Only Player 2 busts
+    if player2_bust:
+        return 1  # Player 1 wins
+
+    # Compare totals if no busts
+    if player1_total > player2_total:
+        return 1  # Player 1 wins
+    elif player1_total < player2_total:
+        return -1  # Player 2 wins
+    else:
+        return 0  # Draw
+
 
 def compute_gain(rewards: list[float], gamma: float) -> float:
     """
     Compute the total gain given the list of future rewards.
-    
+
     Args:
         rewards (list[float]): List of future rewards.
         gamma: discount factor
@@ -380,9 +394,10 @@ def compute_gain(rewards: list[float], gamma: float) -> float:
     g = 0
     w = 1
     for r in rewards:
-        g += w*r
+        g += w * r
         w *= gamma
     return g
+
 
 def discounted_gains(rewards: list[float], gamma) -> list[float]:
     """
@@ -398,74 +413,70 @@ def discounted_gains(rewards: list[float], gamma) -> list[float]:
     gains = [compute_gain(rewards[i:], gamma) for i in range(len(rewards))]
     return gains
 
-def build_experience(turn_log: TurnLog, result: int, gamma) -> Experience:
+
+def build_experience(
+    player_log: TurnLog, opponent_log: TurnLog, result: int, gamma: float
+) -> Experience:
     """
-    Compute experience from the turn log (list of state-action pairs) and the final result.
+    Compute experience from the turn logs and the final result for a two-player game.
 
     Args:
-        turn_log (TurnLog): List of state-action pairs encountered during single gameplay
-        result (int): Final result of the game.
+        player_log (TurnLog): List of state-action pairs for the player.
+        opponent_log (TurnLog): List of state-action pairs for the opponent.
+        result (int): Final result of the game from the player's perspective (+1 win, 0 draw, -1 lose).
+        gamma (float): Discount factor.
 
     Return:
-        Experience: List of state-action-gain triples corresponding to every state-action pair encountered during a game.
+        Experience: List of state-action-gain triples for the player.
     """
-    rewards = [0 for _ in turn_log]
-    rewards[-1] = result
-    gains = discounted_gains(rewards, gamma)
-    exp = [(s, a, g) for (s, a), g in zip(turn_log, gains)]
-    return exp
+    player_rewards = [0 for _ in player_log]
+    player_rewards[-1] = result
 
-def play_game(policy: Policy, 
-              deck: CardDeck, 
-              init_state: State | str | None = None,
-              init_action: Action | str | None = None,
-              gamma : float = 1.0,
-              game_report_callback: ReportCallback | None = None,
-              player_report_callback: ReportCallback | None = None,
-              dealer_report_callback: ReportCallback | None = None) -> tuple[int, Experience]:
-    """A single game of Blackjack, played with the given policy.
-    
-    Args:
-        policy (Policy): the decision policy to use during gameplay
-        init_state (State | str | None): specification of the initial state, see `get_init_state`
-        init_action (Action | str | None): specification of the initial action, see `get_init_action`
-        gamma (float): discount factor
-        game_report_callback (ReportCallback | None): report callback used for the events generated by the game "engine"
-        player_report_callback (ReportCallback | None): report callback used for the player actions
-        dealer_report_callback (ReportCallback | None): report callback used for the dealer actions
+    player_gains = discounted_gains(player_rewards, gamma)
+    player_experience = [(s, a, g) for (s, a), g in zip(player_log, player_gains)]
 
-    Return:
-        int: The result of the game: +1 for win, 0 for draw, -1 for loss
-        Experience: experience accumulated during the game 
-    """
+    return player_experience
+
+
+def play_game(
+    policy1: Policy,
+    policy2: Policy,
+    deck: CardDeck,
+    gamma: float = 1.0,
+    game_report_callback: ReportCallback | None = None,
+    player1_report_callback: ReportCallback | None = None,
+    player2_report_callback: ReportCallback | None = None,
+    debug: bool = False,
+) -> tuple[int, Experience]:
     report = lambda txt: game_report_callback and game_report_callback(txt)
-    state = get_init_state(init_state, deck)
-    action = get_init_action(init_action, state, policy)
-    player_total, turn_log = play_turn(policy, deck, init_state=state, init_action=action, report_callback=player_report_callback)
-    if player_total is not None:
-        dealer_card = CardValue(state.dealer_total) if state.dealer_total != 11 else CardValue.ACE
-        dealer_total, dealer_has_ace = update_total(0, False, dealer_card)
-        dealer_state = State(dealer_total, dealer_has_ace, 0)
-        dealer_total, _ = play_turn(dealer_policy, deck, init_state=dealer_state, report_callback=dealer_report_callback)
-        if dealer_total is not None:
-            if player_total > dealer_total:
-                result = +1
-            elif player_total == dealer_total:
-                result = 0
-            else:
-                result = -1
-        else:
-            result = +1
-    else:
-        result = -1
-    exp = build_experience(turn_log, result, gamma)
-    if result == 1:
-        report("Player WINS")
-    elif result == 0:
-        report("Game DRAW")
-    else:
-        report("Player LOSES")
-    return result, exp
+
+    # Initialize states for both players
+    player1_state, player2_state = get_init_states(deck, debug)
+
+    # Player 1 takes their turn
+    player1_total, player1_log = play_turn(
+        policy1, deck, player1_state, report_callback=player1_report_callback
+    )
+
+    # Player 2 takes their turn
+    player2_total, player2_log = play_turn(
+        policy2, deck, player2_state, report_callback=player2_report_callback
+    )
+
+    # Determine the outcome of the game
+    game_result = compare_totals(player1_total, player2_total)
+
+    # Report the game outcome
+    report(f"Game result: {game_result}")
+
+    # Build experiences for both players
+    player1_experience = build_experience(player1_log, player2_log, game_result, gamma)
+    player2_experience = build_experience(
+        player2_log, player1_log, -game_result, gamma
+    )  # Note the negative result for the second player
+
+    return game_result, player1_experience, player2_experience
+
 
 @dataclass
 class PolicyTestingResult:
@@ -477,29 +488,88 @@ class PolicyTestingResult:
 
     def loss_per_game(self):
         """Average loss per game."""
-        return self.score/self.games_no
+        return self.score / self.games_no
 
     def __repr__(self):
         return f"total score={self.score}/{self.games_no} games ({self.loss_per_game():.4f} per game) :: W {self.wins*100:.2f}% | D {self.draws*100:.2f}% | L {self.losses*100:.2f}%"
 
-def apply_policy(policy: Policy, deck: CardDeck, games_no=1000, gamma=1, random_init_state=False, random_init_action=False) -> tuple[PolicyTestingResult, Experience]:
-    wins, losses, draws, score = 0, 0, 0, 0
-    init_action = "random" if random_init_action else None
-    init_state = "random" if random_init_state else None
-    experience = []
-    for k in range(games_no):
-        res, exp = play_game(policy, deck, gamma=gamma, init_state=init_state, init_action=init_action)
-        score += res
-        experience.extend(exp)
+
+def apply_policy_exhaustive(
+    policy1: Policy, policy2: Policy, deck: CardDeck, epoch_no=5, gamma=1
+) -> tuple[PolicyTestingResult, PolicyTestingResult]:
+    wins1, losses1, draws1, score1, games_no1 = 0, 0, 0, 0, 0
+    wins2, losses2, draws2, score2, games_no2 = 0, 0, 0, 0, 0
+
+    for _ in range(epoch_no):
+        res, exp_player1, exp_player2 = play_game(policy1, policy2, deck, gamma=gamma)
+
+        # Update scores and counts for Player 1
+        games_no1 += 1
         if res == 1:
-            wins += 1
+            wins1 += 1
         elif res == 0:
-            draws += 1
+            draws1 += 1
         else:
-            losses += 1
-    return PolicyTestingResult(games_no, score, wins/games_no, draws/games_no, losses/games_no), experience
+            losses1 += 1
+        score1 += res
+
+        # Update scores and counts for Player 2
+        games_no2 += 1
+        if res == -1:
+            wins2 += 1
+        elif res == 0:
+            draws2 += 1
+        else:
+            losses2 += 1
+        score2 -= res  # Negative because a win for Player 1 is a loss for Player 2
+
+    result1 = PolicyTestingResult(
+        games_no1, score1, wins1 / games_no1, draws1 / games_no1, losses1 / games_no1
+    )
+    result2 = PolicyTestingResult(
+        games_no2, score2, wins2 / games_no2, draws2 / games_no2, losses2 / games_no2
+    )
+
+    return result1, result2
+
+
+GainsDict = dict[State, tuple[list[float], list[float]]]
+
+
+def create_gains_dict(experience: Experience) -> GainsDict:
+    """Create gains dict from the given experience."""
+    gains_dict = dict()
+    for s, a, g in experience:
+        action_gains = gains_dict.get(s, ([], []))
+        action_gains[a.value].append(g)
+        gains_dict[s] = action_gains
+    return gains_dict
+
+
+# Incremental Monte Karlo
+def update_q_value(current: float, target: float, alpha: float) -> float:
+    """Update the given current estimate given the new target.
+
+    Args:
+        current (float): existing estimate
+        target (float): the given target
+        alpha (float): learning rate
+
+    Return:
+        float: the new, updated estimate
+    """
+    if current is not None and target is not None:
+        return current + alpha * (target - current)
+    elif current is None:
+        return target
+    elif target is None:
+        return current
+    else:
+        return None
+
 
 QDict = dict[State, tuple[float, float]]
+
 
 def create_greedy_policy(q_dict: QDict) -> Policy:
     """Create a greedy policy function based on the given Q-dictionary."""
@@ -511,35 +581,29 @@ def create_greedy_policy(q_dict: QDict) -> Policy:
             assert len(q_values) == no_actions, f"Invalid Q-dict for state {s}."
             if any([v is None for v in q_values]):
                 return random_policy(s)
-            else: 
+            else:
                 ndx = np.argmax(q_values)
                 return Action(ndx)
         else:
             return random_policy(s)
-    
+
     return policy
 
-GainsDict = dict[State, tuple[list[float], list[float]]]
 
-def create_gains_dict(experience: Experience)-> GainsDict:
-    """Create gains dict from the given experience."""
-    gains_dict = dict()
-    for s, a, g in experience:
-        action_gains = gains_dict.get(s, ([], []))
-        action_gains[a.value].append(g)
-        gains_dict[s] = action_gains
-    return gains_dict
-
-def evaluate_Q(experience: Experience) -> QDict:
-    """Evaluate Q-function based on the given experience."""
+def update_Q(q_dict: QDict, experience: Experience, alpha=0.1):
+    """Update Q-function based on the given experience."""
     gains_dict = create_gains_dict(experience)
 
-    q_dict = dict()
     for s, (gains_HIT, gains_HOLD) in gains_dict.items():
-        q_value_HIT = np.mean(gains_HIT) if gains_HIT else None
-        q_value_HOLD = np.mean(gains_HOLD) if gains_HOLD else None
+        target_value_HIT = np.mean(gains_HIT) if gains_HIT else None
+        target_value_HOLD = np.mean(gains_HOLD) if gains_HOLD else None
+        old_value_HIT, old_value_HOLD = q_dict.get(s, (None, None))
+        q_value_HIT = update_q_value(old_value_HIT, target_value_HIT, alpha)
+        q_value_HOLD = update_q_value(old_value_HOLD, target_value_HOLD, alpha)
         q_dict[s] = (q_value_HIT, q_value_HOLD)
+
     return q_dict
+
 
 def visualize_policy(policy):
     """Visualize the policy.
@@ -583,39 +647,102 @@ def visualize_policy(policy):
     plt.yticks(np.arange(2.5, 12.5, 1), np.arange(2, 12, 1))
     plt.xlabel("player total")
     plt.ylabel("dealer total")
+    plt.show()
 
-# Incremental Monte Karlo
-def update_q_value(current: float, target: float, alpha: float) -> float:
-    """Update the given current estimate given the new target.
-    
-    Args:
-        current (float): existing estimate
-        target (float): the given target
-        alpha (float): learning rate
 
-    Return:
-        float: the new, updated estimate
-    """
-    if current is not None and target is not None:
-        return current + alpha * (target - current)
-    elif current is None:
-        return target
-    elif target is None:
-        return current
-    else:
-        return None
+def main(debug: bool = False):
+    deck = CardDeck()
 
-def update_Q(q_dict: QDict, experience: Experience, alpha=0.1):
-    """Update Q-function based on the given experience."""
-    gains_dict = create_gains_dict(experience)
+    if debug:
+        player1_report_callback = lambda txt: print(f"[bold blue]Player 1:[/] {txt}")
+        player2_report_callback = lambda txt: print(f"[bold green]Player 2:[/] {txt}")
+        game_report_callback = lambda txt: print(f"[bold red]Game:[/] {txt}")
 
-    for s, (gains_HIT, gains_HOLD) in gains_dict.items():
-        target_value_HIT = np.mean(gains_HIT) if gains_HIT else None
-        target_value_HOLD = np.mean(gains_HOLD) if gains_HOLD else None
-        old_value_HIT, old_value_HOLD = q_dict.get(s, (None, None))
-        q_value_HIT = update_q_value(old_value_HIT, target_value_HIT, alpha)
-        q_value_HOLD = update_q_value(old_value_HOLD, target_value_HOLD, alpha)
-        q_dict[s] = (q_value_HIT, q_value_HOLD)
+        policy1 = random_policy
+        policy2 = random_policy
 
-    return q_dict
+        game_result, player1_experience, player2_experience = play_game(
+            policy1,
+            policy2,
+            deck,
+            game_report_callback=game_report_callback,
+            player1_report_callback=player1_report_callback,
+            player2_report_callback=player2_report_callback,
+            debug=debug,
+        )
 
+        if game_result == 1:
+            print("Player 1 wins!")
+        elif game_result == -1:
+            print("Player 2 wins!")
+        else:
+            print("The game is a draw.")
+
+        print("Player 1 Experience:")
+        for experience in player1_experience:
+            print(experience)
+
+        print("Player 2 Experience:")
+        for experience in player2_experience:
+            print(experience)
+
+    q_dict_player1 = dict()
+    q_dict_player2 = dict()
+    q_dict_best_player1 = dict()
+    q_dict_best_player2 = dict()
+    res_best_player1 = -float("inf")
+    res_best_player2 = -float("inf")
+
+    for _ in trange(10000):
+        # Create greedy policies for both players
+        policy_player1 = create_greedy_policy(q_dict_player1)
+        policy_player2 = create_greedy_policy(q_dict_player2)
+
+        # Play games and update policies
+        _, exp_player1, exp_player2 = play_game(
+            policy_player1, policy_player2, deck, gamma=0.9
+        )
+        q_dict_player1 = update_Q(q_dict_player1, exp_player1, alpha=0.1)
+        q_dict_player2 = update_Q(q_dict_player2, exp_player2, alpha=0.1)
+
+        # Evaluate policies after each epoch
+        res_player1, res_player2 = apply_policy_exhaustive(
+            policy_player1, policy_player2, deck
+        )
+
+        # Update the best result and Q-dictionary for each player
+        if res_player1.score > res_best_player1:
+            q_dict_best_player1 = deepcopy(q_dict_player1)
+            res_best_player1 = res_player1.score
+        if res_player2.score > res_best_player2:
+            q_dict_best_player2 = deepcopy(q_dict_player2)
+            res_best_player2 = res_player2.score
+
+    # Retrieve the best policies for final evaluation
+    final_policy_player1 = create_greedy_policy(q_dict_best_player1)
+    final_policy_player2 = create_greedy_policy(q_dict_best_player2)
+
+    # Evaluate final policies for both players
+    final_res_player1, final_res_player2 = apply_policy_exhaustive(
+        final_policy_player1,
+        final_policy_player2,
+        deck,
+        epoch_no=10000,  # More comprehensive evaluation
+    )
+
+    # Print final evaluation results
+    print("Final Policy Evaluation Player 1:")
+    print(final_res_player1)
+    print("Final Policy Evaluation Player 2:")
+    print(final_res_player2)
+
+    # Visualize final policies
+    print("Visualizing Final Policy for Player 1:")
+    visualize_policy(final_policy_player1)
+    print("Visualizing Final Policy for Player 2:")
+    visualize_policy(final_policy_player2)
+
+
+# Execute the main function
+if __name__ == "__main__":
+    main(debug=False)
