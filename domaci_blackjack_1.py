@@ -17,6 +17,7 @@ from dataclasses import dataclass, astuple
 from typing import Callable
 from random import random, randint
 from copy import deepcopy
+import matplotlib.patches as mpatches
 
 from tqdm import trange
 from rich import print
@@ -275,6 +276,11 @@ def random_action() -> Action:
 
 def random_policy(s: State) -> Action:
     return random_action()
+
+
+def dealer_policy(state: State) -> Action:
+    """Dealer policy: Hit if below 17, Hold if 17 or above."""
+    return Action.HIT if state.total < 17 else Action.HOLD
 
 
 Policy = Callable[[State], Action]
@@ -579,7 +585,7 @@ def create_greedy_policy(q_dict: QDict) -> Policy:
         q_values = q_dict.get(s, None)
         if q_values is not None:
             assert len(q_values) == no_actions, f"Invalid Q-dict for state {s}."
-            if any([v is None for v in q_values]):
+            if any([q_value is None for q_value in q_values]):
                 return random_policy(s)
             else:
                 ndx = np.argmax(q_values)
@@ -647,10 +653,38 @@ def visualize_policy(policy):
     plt.yticks(np.arange(2.5, 12.5, 1), np.arange(2, 12, 1))
     plt.xlabel("player total")
     plt.ylabel("dealer total")
+
+    # Create patches for the legend
+    red_patch = mpatches.Patch(color="red", label="HIT (with or without ACE)")
+    blue_patch = mpatches.Patch(color="blue", label="HOLD (with or without ACE)")
+    green_patch = mpatches.Patch(color="green", label="HIT only with usable ACE")
+    black_patch = mpatches.Patch(color="black", label="HIT only without usable ACE")
+
+    # Add the legend to the plot
+    plt.legend(handles=[red_patch, blue_patch, green_patch, black_patch])
+
     plt.show()
 
 
-def main(debug: bool = False):
+def pre_train_players(deck, num_games, alpha=0.1, gamma=0.9):
+    q_dict_player1 = dict()
+    q_dict_player2 = dict()
+
+    for _ in trange(num_games, desc="Pretraining"):
+        # Training Player 1 against Dealer
+        policy_player1 = create_greedy_policy(q_dict_player1)
+        _, exp_player1, _ = play_game(policy_player1, dealer_policy, deck, gamma=gamma)
+        q_dict_player1 = update_Q(q_dict_player1, exp_player1, alpha=alpha)
+
+        # Training Player 2 against Dealer
+        policy_player2 = create_greedy_policy(q_dict_player2)
+        _, exp_player2, _ = play_game(policy_player2, dealer_policy, deck, gamma=gamma)
+        q_dict_player2 = update_Q(q_dict_player2, exp_player2, alpha=alpha)
+
+    return q_dict_player1, q_dict_player2
+
+
+def main(debug: bool = False, pretrain: bool = True):
     deck = CardDeck()
 
     if debug:
@@ -688,12 +722,24 @@ def main(debug: bool = False):
 
     q_dict_player1 = dict()
     q_dict_player2 = dict()
+
     q_dict_best_player1 = dict()
     q_dict_best_player2 = dict()
+
+    if pretrain:
+        q_dict_player1, q_dict_player2 = pre_train_players(deck, num_games=50000)
+        pretrained_policy_player1 = create_greedy_policy(q_dict_best_player1)
+        pretrained_policy_player2 = create_greedy_policy(q_dict_best_player2)
+
+        print("Visualizing Pretrained Policy for Player 1:")
+        visualize_policy(pretrained_policy_player1)
+        print("Visualizing Pretrained Policy for Player 2:")
+        visualize_policy(pretrained_policy_player2)
+
     res_best_player1 = -float("inf")
     res_best_player2 = -float("inf")
 
-    for _ in trange(10000):
+    for _ in trange(100000):
         # Create greedy policies for both players
         policy_player1 = create_greedy_policy(q_dict_player1)
         policy_player2 = create_greedy_policy(q_dict_player2)
@@ -745,4 +791,4 @@ def main(debug: bool = False):
 
 # Execute the main function
 if __name__ == "__main__":
-    main(debug=False)
+    main(debug=False, pretrain=True)
