@@ -338,13 +338,12 @@ def train_sarsa(env: InvertedPendulumEnv, num_episodes: int):
             state, action = next_state, next_action
 
 
-def animate_system(env: InvertedPendulumEnv, steps: int, policy):
+def animate_system(env: InvertedPendulumEnv, policy):
     """
     Animate the cart and pendulum system for a given number of steps.
 
     Args:
     env (InvertedPendulumEnv): The environment of the inverted pendulum.
-    steps (int): Number of steps to animate.
     """
 
     fig, ax = plt.subplots()
@@ -400,14 +399,14 @@ def animate_system(env: InvertedPendulumEnv, steps: int, policy):
 
         return cart, pendulum, left_boundary, right_boundary, info_text
 
-    ani = FuncAnimation(fig, update, frames=steps, init_func=init, blit=True)
+    ani = FuncAnimation(fig, update, frames=env.time_limit, init_func=init, blit=True)
     plt.show()
 
 
 env = InvertedPendulumEnv(
-    max_force=10, time_limit=200, m=1, M=5, l=2, epsilon=0.3, resolution=20
+    max_force=10, time_limit=200, m=1, M=5, l=2, epsilon=0.3, resolution=25
 )
-train_sarsa(env, num_episodes=5000)
+train_sarsa(env, num_episodes=7000)
 optimal_policy = env.policy
 env.reset()
-animate_system(env, steps=200, policy=optimal_policy)
+animate_system(env, policy=optimal_policy)
