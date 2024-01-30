@@ -259,7 +259,7 @@ class InvertedPendulumEnv:
         x, x_dot, theta, theta_dot = state
         round_x = round(x, 2)
         round_x_dot = round(x_dot, 1)
-        round_theta = round(theta)
+        round_theta = round(theta, 2)
         round_theta_dot = round(theta_dot, 1)
 
         return (round_x, round_x_dot, round_theta, round_theta_dot)
