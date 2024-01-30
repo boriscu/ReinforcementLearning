@@ -407,8 +407,7 @@ def animate_system(env: InvertedPendulumEnv, steps: int, policy):
 env = InvertedPendulumEnv(
     max_force=10, time_limit=200, m=1, M=5, l=2, epsilon=0.3, resolution=20
 )
-num_episodes = 5000
-train_sarsa(env, num_episodes)
+train_sarsa(env, num_episodes=5000)
 optimal_policy = env.policy
 env.reset()
 animate_system(env, steps=200, policy=optimal_policy)
