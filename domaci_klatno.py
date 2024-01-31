@@ -224,8 +224,8 @@ class InvertedPendulumEnv:
         # Penalize for going out of bounds or pendulum falling
         if abs(x) > self.cart_boundary or abs(theta - np.pi) > np.pi / 2:
             reward -= 1000
-        # else:
-        #     reward += 1  # Small positive reward for staying within bounds and upright
+        else:
+            reward += 1  # Small positive reward for staying within bounds and upright
 
         return reward
 
@@ -406,7 +406,7 @@ def animate_system(env: InvertedPendulumEnv, policy):
 env = InvertedPendulumEnv(
     max_force=10, time_limit=200, m=1, M=5, l=2, epsilon=0.3, resolution=30
 )
-train_sarsa(env, num_episodes=15000)
+train_sarsa(env, num_episodes=10000)
 optimal_policy = env.policy
 env.reset()
 animate_system(env, policy=optimal_policy)
