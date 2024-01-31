@@ -12,7 +12,31 @@ from prettytable import PrettyTable
 
 
 class Node(ABC):
+    """
+    Abstract base class representing a node in a maze environment.
+
+    This class provides a template for different types of nodes that can exist in a maze. Each node has a position in the maze, represented by x and y coordinates. The class defines several methods that can be used to query the properties of the node, such as its position, whether it's steppable, terminal, or holds a value. The class also includes an abstract method, get_reward, which must be implemented by subclasses to define how rewards are calculated for each type of node.
+
+    Attributes:
+        x (int): The x-coordinate of the node in the maze.
+        y (int): The y-coordinate of the node in the maze.
+
+    Methods:
+        get_position: Returns the position of the node as a tuple (x, y).
+        get_reward: Abstract method to get the reward value of the node.
+        is_steppable: Checks if the node can be stepped on.
+        is_terminal: Checks if the node is a terminal node.
+        has_value: Checks if the node holds a value.
+    """
+
     def __init__(self, x: int, y: int):
+        """
+        Initializes a Node instance.
+
+        Args:
+            x (int): The x-coordinate of the node.
+            y (int): The y-coordinate of the node.
+        """
         self.x = x
         self.y = y
 
@@ -30,6 +54,8 @@ class Node(ABC):
         """
         Gets the reward value associated with the node.
 
+        This is an abstract method and should be implemented by subclasses. The implementation should define how the reward value for the node is determined.
+
         Returns:
             float: The reward value for the node. Specific value depends on the type of node.
         """
@@ -38,6 +64,8 @@ class Node(ABC):
     def is_steppable(self) -> bool:
         """
         Checks if the node can be stepped on.
+
+        By default, a node is steppable. This method can be overridden in subclasses if some nodes are not meant to be stepped on (e.g., walls).
 
         Returns:
             bool: True if the node is steppable, False otherwise.
@@ -48,6 +76,8 @@ class Node(ABC):
         """
         Checks if the node is a terminal node.
 
+        A terminal node signifies an end condition in the maze. By default, nodes are not terminal. This method can be overridden in subclasses to mark certain nodes as terminal.
+
         Returns:
             bool: True if the node is a terminal node, False otherwise.
         """
@@ -56,6 +86,8 @@ class Node(ABC):
     def has_value(self) -> bool:
         """
         Checks if the node holds a value.
+
+        This method can be used to determine if a node contributes a value (such as a reward or penalty) in the maze. By default, nodes are considered to have a value. This can be overridden in subclasses.
 
         Returns:
             bool: True if the node has a value, False otherwise.
@@ -145,6 +177,17 @@ ACTIONS = [1, 2, 3]
 
 
 class MazeEnvironment:
+    """
+    Represents a maze environment as a graph where each node corresponds to a state in the maze.
+
+    The environment is initialized with a given size and comprises various types of nodes, including RegularNode, TerminalNode, WallNode, and TeleportNode. The maze is structured as a graph, with nodes interconnected and probabilities assigned to transitions between nodes. The class provides methods for initializing the graph, setting transition probabilities, retrieving information about the maze, and more.
+
+    Attributes:
+        graph_height (int): The height of the maze.
+        graph_width (int): The width of the maze.
+        graph (dict): A dictionary representing the maze graph, where keys are node objects and values are lists of actions and connected nodes with probabilities.
+    """
+
     def __init__(self, dimensions: tuple[int, int]):
         """
         Initializes the MazeEnvironment with a specified size.
@@ -196,12 +239,20 @@ class MazeEnvironment:
         """
         Sets and returns the movement probabilities for the given node to other nodes in the graph.
 
+        This method determines the probabilities for transitioning from the specified node to other nodes in the graph. It handles different types of nodes with specific rules:
+        - Wall and Terminal Nodes: These nodes do not have outgoing probabilities as they represent barriers or end states in the maze. Hence, if the given node is a WallNode or TerminalNode, the method returns an empty list.
+        - Regular and Teleport Nodes: For these nodes, the method calculates probabilities for transitioning to other nodes.
+
+        The probabilities are determined as follows:
+        - A subset of nodes (up to half of all non-wall nodes) is assigned a zero probability, effectively creating 'dead ends' or less desirable paths.
+        - The remaining nodes are assigned non-zero probabilities, distributed among the available actions. This setup allows for the creation of a graph where some paths are more likely than others, introducing variability and complexity to the maze navigation.
+
         Args:
             node (Node): The node for which probabilities are to be set.
-            g (dict): The graph of the maze environment.
+            graph (dict): The graph of the maze environment.
 
         Returns:
-            list: A list of probabilities for moving from the given node to other nodes.
+            list: A list of probabilities for moving from the given node to other nodes. Each element in the list is a list itself, containing an action, the next node, and the probability of moving to that node when the action is taken.
         """
         # Terminal and wall node do not have any probabilities
         if isinstance(node, (WallNode, TerminalNode)):
@@ -223,6 +274,7 @@ class MazeEnvironment:
         # Distribute the remaining nodes among the actions
         for action in ACTIONS:
             if nodes_list:
+                # Calculate the number of nodes to assign to each action, ensuring at least one node per action
                 action_len = len(nodes_list) // len(ACTIONS) or 1
                 nodes_for_action = nodes_list[:action_len]
                 nodes_list = nodes_list[action_len:]
@@ -237,6 +289,13 @@ class MazeEnvironment:
     def generate_random_node(w: int, h: int) -> Node:
         """
         Generates a random node of a specific type based on a probability distribution.
+
+        The type of node generated is determined by a random number, with the following probabilities:
+        - RegularNode with reward -1: 10/18 chance (~55.56%)
+        - RegularNode with reward -10: 2/18 chance (~11.11%)
+        - TerminalNode: 2/18 chance (~11.11%)
+        - WallNode: 2/18 chance (~11.11%)
+        - TeleportNode: 2/18 chance (~11.11%)
 
         Args:
             w (int): The x-coordinate of the node.
@@ -275,7 +334,6 @@ class MazeEnvironment:
         probabilities /= sum(probabilities)
         return probabilities
 
-    # prints graph (with position)
     def print_graph(self):
         """
         Prints the maze graph in a human-readable format. The graph is represented in terms of positions, actions, and probabilities.
@@ -311,7 +369,6 @@ class MazeEnvironment:
                 print(" ")
         return
 
-    # returns True if given node is terminal
     @staticmethod
     def is_terminal(node: Node) -> bool:
         """
@@ -326,7 +383,6 @@ class MazeEnvironment:
 
         return node.is_terminal()
 
-    # return True if node at position (x,y) is terminal
     def is_terminal_pos(self, position: tuple) -> bool:
         """
         Checks if the node at the given position is a terminal node.
@@ -337,11 +393,8 @@ class MazeEnvironment:
         Returns:
             bool: True if the node at the given position is terminal, False otherwise.
         """
-        for g in self.graph:
-            if g.get_position() == position:
-                return g.is_terminal()
+        return self.get_current_pos_node(position).is_terminal()
 
-    # returns graph
     def get_graph(self) -> dict:
         """
         Returns the graph of the maze environment.
@@ -351,7 +404,6 @@ class MazeEnvironment:
         """
         return self.graph
 
-    # returns node at position (x,y)
     def get_current_pos_node(self, pos: tuple) -> Node:
         """
         Returns the node at the given position.
@@ -365,25 +417,33 @@ class MazeEnvironment:
         Raises:
             Exception: If the position is invalid.
         """
-        for g in self.graph:
-            if g.get_position() == pos:
-                return g
+        for node in self.graph:
+            if node.get_position() == pos:
+                return node
         raise Exception("Invalid position given.")
 
-    # search for node that is not wall node in graph
-    def random_not_wall(self, g: list) -> Node:
+    def random_not_wall(self, nodes: list, depth: int = 0, max_depth: int = 20) -> Node:
         """
-        Selects a random node from the graph that is not a wall node.
+        Selects a random node from the graph that is not a wall node. Recursion is limited to a maximum depth.
 
         Args:
-            g (list): The list of nodes in the graph.
+            nodes (list): The list of nodes in the graph.
+            depth (int): The current depth of recursion.
+            max_depth (int): The maximum depth allowed for recursion.
 
         Returns:
-            Node: A randomly selected node that is not a wall node.
+            Node: A randomly selected node that is not a wall node. Returns None if the maximum recursion depth is reached.
+
+        Raises:
+            RecursionError: If the maximum recursion depth is exceeded.
         """
-        random_node = rdm.choice(g)
+        if depth > max_depth:
+            raise RecursionError("Maximum recursion depth exceeded in random_not_wall")
+
+        random_node = rdm.choice(nodes)
         if isinstance(random_node, WallNode):
-            random_node = self.random_not_wall(g)
+            return self.random_not_wall(nodes, depth + 1, max_depth)
+
         return random_node
 
     def get_action_probabilities(self, node: Node, action: int) -> list:
@@ -424,6 +484,8 @@ class MazeEnvironment:
             return nodes_probs[0][0] if nodes_probs else self.get_default_node()
 
         probabilities = [probability for _, probability in nodes_probs]
+        # Randomly select an index based on the distribution of probabilities,
+        # where each index corresponds to a node in action_probabilities
         index = np.random.choice(len(probabilities), p=probabilities)
         return nodes_probs[index][0]
 
@@ -582,13 +644,17 @@ def plot_maze_graph(env: MazeEnvironment):
 
 def init_v_values(env: MazeEnvironment) -> dict:
     """
-    Initializes the V-values for the value iteration algorithm.
+    Initializes the V-values (state value estimates) for each node in the maze environment for the value iteration algorithm.
+
+    The V-values are initialized as follows:
+    - For terminal nodes, the V-value is set to 0, as these nodes represent end states in the maze.
+    - For non-terminal nodes, the V-values are initialized to a random negative value. This is achieved by multiplying a random number between 0 and 1 with -20. The random negative initialization helps in facilitating the value iteration process by providing a varied starting point for each non-terminal node.
 
     Args:
         env (MazeEnvironment): The maze environment.
 
     Returns:
-        dict: A dictionary with positions as keys and initial V-values as values.
+        dict: A dictionary with positions as keys and initial V-values as values. The keys are tuples representing the positions (x, y) of the nodes, and the values are the initialized V-values for those nodes.
     """
     return {
         node.get_position(): -20 * random() if not env.is_terminal(node) else 0
@@ -598,13 +664,17 @@ def init_v_values(env: MazeEnvironment) -> dict:
 
 def init_q_values(env: MazeEnvironment) -> dict:
     """
-    Initializes the Q-values for the Q-learning algorithm.
+    Initializes the Q-values for the Q-learning algorithm. Q-values represent the expected utility of taking a given action in a given state and following the optimal policy thereafter.
+
+    The Q-values are initialized as follows:
+    - For terminal nodes, the Q-value for each action is set to 0. This is because terminal nodes represent end states and there is no future reward expected once an agent reaches these states.
+    - For non-terminal nodes, the Q-values are initialized to a random negative value for each action. This is done by multiplying a random number between 0 and 1 with -20. The random negative initialization provides a starting point for the algorithm to update these values based on the environment's rewards and transitions.
 
     Args:
         env (MazeEnvironment): The maze environment.
 
     Returns:
-        dict: A dictionary with (position, action) tuples as keys and initial Q-values as values.
+        dict: A dictionary with (position, action) tuples as keys and initial Q-values as values. The keys are tuples where the first element is the position (x, y) of a node and the second element is an action, and the values are the initialized Q-values for those state-action pairs.
     """
     q_values = {}
     for node in env.get_graph():
@@ -616,20 +686,32 @@ def init_q_values(env: MazeEnvironment) -> dict:
     return q_values
 
 
-def update_v_value(
+def calculate_v_value(
     env: MazeEnvironment, position: tuple, values: dict, gamma: float
 ) -> float:
     """
-    Updates the V-value for a single node.
+    Calculates the V-value for a single node using the Bellman equation for stochastic environments.
+
+    The Bellman equation used for calculation is:
+        V(s) = max_a Σ [ P(s'|s, a) * (R(s, a, s') + γ * V(s')) ]
+    where:
+        V(s) is the value of the state s,
+        a is an action,
+        P(s'|s, a) is the probability of transitioning to state s' from state s taking action a,
+        R(s, a, s') is the reward received after transitioning from state s to state s' with action a,
+        γ is the discount factor,
+        V(s') is the value of the state s'.
+
+    This function computes the expected utility of each action at the given node and returns the maximum of these values.
 
     Args:
         env (MazeEnvironment): The maze environment.
         position (tuple): The position of the node.
-        values (dict): The current V-values.
-        gamma (float): The discount factor.
+        values (dict): The current V-values for each node in the environment.
+        gamma (float): The discount factor, representing the importance of future rewards.
 
     Returns:
-        float: The updated V-value for the node.
+        float: The calculated V-value for the node at the given position. If the node is a wall, a specific value (e.g., -100) is returned as walls should not contribute to the utility.
     """
     node_at_position = env.get_current_pos_node(position)
     action_values = []  # Stores the calculated value for each action
@@ -650,20 +732,31 @@ def update_v_value(
     return max(action_values) if max(action_values) != 0 else -100
 
 
-def update_q_value(
+def calculate_q_value(
     env: MazeEnvironment, state: tuple, values: dict, gamma: float
 ) -> float:
     """
-    Updates the Q-value for a single state-action pair.
+    Calculates the Q-value for a single state-action pair using the Bellman equation for Q-learning.
+
+    The Bellman equation for Q-learning is given by:
+        Q(s, a) = Σ [ P(s'|s, a) * (R(s, a, s') + γ * max_a' Q(s', a')) ]
+    where:
+        Q(s, a) is the Q-value of taking action a in state s,
+        P(s'|s, a) is the probability of transitioning to state s' from state s with action a,
+        R(s, a, s') is the reward received after transitioning from state s to state s' with action a,
+        γ is the discount factor,
+        max_a' Q(s', a') represents the maximum Q-value for the next state s' over all possible actions a'.
+
+    This function calculates the expected utility of taking a given action in a given state, and then acting optimally (greedily) thereafter. For each potential next state, it computes the product of the transition probability, the immediate reward, and the discounted future value using the current best estimate of Q-values.
 
     Args:
         env (MazeEnvironment): The maze environment.
         state (tuple): The state-action pair (position, action).
-        values (dict): The current Q-values.
-        gamma (float): The discount factor.
+        values (dict): The current Q-values for each state-action pair in the environment.
+        gamma (float): The discount factor, representing the importance of future rewards.
 
     Returns:
-        float: The updated Q-value for the state-action pair.
+        float: The calculated Q-value for the given state-action pair. If there are no possible transitions (e.g., wall node), a specific value (e.g., -100) is returned as such nodes should not contribute to the utility.
     """
     node_at_state = env.get_current_pos_node(state[0])
     action_value_contributions = []
@@ -689,16 +782,22 @@ def async_update_all_values(
     env: MazeEnvironment, values: dict, gamma: float, q_function: bool
 ) -> dict:
     """
-    Performs an asynchronous update of all values (V or Q) for one iteration.
+    Performs an asynchronous update of all values (V or Q) for one iteration in the value iteration or Q-learning algorithm.
+
+    This function iterates over all state-action pairs (for Q-learning) or all states (for value iteration) in the environment and updates their values based on the current estimates. The update is 'asynchronous' because the values are updated one by one, and each update uses the most recent values.
+
+    When updating Q-values (q_function=True), the function calculates the Q-value for each state-action pair where the state is not terminal, using the calculate_q_value function. This involves evaluating the expected utility of each possible next state from the given state-action pair.
+
+    When updating V-values (q_function=False), the function calculates the V-value for each non-terminal state using the calculate_v_value function. This involves finding the maximum expected utility over all possible actions from that state.
 
     Args:
         env (MazeEnvironment): The maze environment.
-        values (dict): The current values (V or Q).
-        gamma (float): The discount factor.
-        q_function (bool): Whether to update Q-values instead of V-values.
+        values (dict): The current values (V or Q) for each state or state-action pair in the environment.
+        gamma (float): The discount factor, representing the importance of future rewards.
+        q_function (bool): Indicates whether to update Q-values (True) or V-values (False).
 
     Returns:
-        dict: The updated values after one iteration.
+        dict: The updated values after one iteration. The structure is the same as the input 'values' dict, containing updated V or Q values for each state or state-action pair.
     """
     for state_action_pair in values:
         if q_function:
@@ -706,7 +805,7 @@ def async_update_all_values(
             if not env.is_terminal_pos(
                 state_action_pair[0]
             ):  # state_action_pair is (position, action)
-                values[state_action_pair] = update_q_value(
+                values[state_action_pair] = calculate_q_value(
                     env, state_action_pair, values, gamma
                 )
         else:
@@ -715,7 +814,7 @@ def async_update_all_values(
                 state_action_pair  # Here, state_action_pair is actually just a position
             )
             if not env.is_terminal_pos(position):
-                values[position] = update_v_value(env, position, values, gamma)
+                values[position] = calculate_v_value(env, position, values, gamma)
 
     return values
 
@@ -929,7 +1028,24 @@ def evaluate_values(
 
 def update_state_value_q(state, values, transition_probs, gamma, policy):
     """
-    Helper function to update state value for Q-learning.
+    Updates the Q-value for a given state-action pair in the context of a specific policy.
+
+    This function is used in policy evaluation and iteratively updates the Q-value for each state-action pair based on the current policy. The updated value is calculated by considering the expected utility of the action prescribed by the policy in the next state.
+
+    The Q-value is updated as follows:
+        Q(s, a) = R(s, a, s') + γ * Q(s', policy(s'))
+    where s' is the next state, R(s, a, s') is the immediate reward, γ is the discount factor,
+    and policy(s') is the action dictated by the policy in the next state.
+
+    Args:
+        state (tuple): The current state-action pair.
+        values (dict): A dictionary holding the current Q-values for each state-action pair.
+        transition_probs (list): A list of tuples (next_node, probability) for the possible next states and their probabilities.
+        gamma (float): The discount factor.
+        policy (dict): The policy being evaluated, mapping states to actions.
+
+    Returns:
+        None: This function updates the Q-values in place.
     """
     for next_node, prob in transition_probs:
         if isinstance(next_node, TerminalNode):
@@ -944,7 +1060,23 @@ def update_state_value_q(state, values, transition_probs, gamma, policy):
 
 def update_state_value_v(state, values, transition_probs, gamma):
     """
-    Helper function to update state value for value iteration.
+    Updates the V-value for a given state in the context of a specific policy.
+
+    This function is part of the policy evaluation process and iteratively updates the V-value for each state based on the current policy. The updated value is calculated by summing the expected utilities for all possible next states, weighted by their transition probabilities and the policy's prescribed actions.
+
+    The V-value is updated as follows:
+        V(s) = Σ [ P(s'|s, policy(s)) * (R(s, policy(s), s') + γ * V(s')) ]
+    where s' is a potential next state, P(s'|s, policy(s)) is the transition probability,
+    R(s, policy(s), s') is the immediate reward, and γ is the discount factor.
+
+    Args:
+        state (tuple): The current state.
+        values (dict): A dictionary holding the current V-values for each state.
+        transition_probs (list): A list of tuples (next_node, probability) for the possible next states and their probabilities.
+        gamma (float): The discount factor.
+
+    Returns:
+        None: This function updates the V-values in place.
     """
     value_sum = 0
     for next_node, prob in transition_probs:
