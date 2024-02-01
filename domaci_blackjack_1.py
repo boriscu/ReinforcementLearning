@@ -244,17 +244,6 @@ def get_init_states(deck: CardDeck, debug: bool = False) -> (State, State):
     return player1_state, player2_state
 
 
-def all_states() -> list[State]:
-    """Create a list of all possible Blackjack states."""
-    states = []
-    for total in range(2, 22):
-        for dealer_value in range(2, 12):
-            states.append(State(total, False, dealer_value))
-            if total >= 11:
-                states.append(State(total, True, dealer_value))
-    return states
-
-
 class Action(Enum):
     """Blackjack action."""
 
@@ -439,7 +428,9 @@ def build_experience(
     player_rewards[-1] = result
 
     player_gains = discounted_gains(player_rewards, gamma)
-    player_experience = [(s, a, g) for (s, a), g in zip(player_log, player_gains)]
+    player_experience = [
+        (state, action, gain) for (state, action), gain in zip(player_log, player_gains)
+    ]
 
     return player_experience
 
@@ -503,6 +494,46 @@ class PolicyTestingResult:
 def apply_policy_exhaustive(
     policy1: Policy, policy2: Policy, deck: CardDeck, epoch_no=5, gamma=1
 ) -> tuple[PolicyTestingResult, PolicyTestingResult]:
+    """
+    Conducts an exhaustive evaluation of two policies by simulating a series of games
+    between them. It aggregates the outcomes of these games to provide a comprehensive
+    assessment of each policy's performance.
+
+    The function iterates through a specified number of epochs (games), where in each game,
+    the two policies compete against each other. The outcomes of these games (win, loss, draw)
+    are recorded and used to calculate the overall performance metrics for each policy.
+
+    Parameters:
+        policy1 (Policy): The first policy to be evaluated. A policy is a function that
+                          decides an action based on the current game state.
+        policy2 (Policy): The second policy to be evaluated.
+        deck (CardDeck): An instance of a deck of cards, which will be used throughout the
+                         game simulations to draw cards.
+        epoch_no (int, optional): The number of games to simulate for the evaluation.
+                                  Defaults to 5.
+        gamma (float, optional): The discount factor used in the game's reward calculation.
+                                 It's not directly used in this function but is passed to
+                                 the game simulation function. Defaults to 1, indicating no
+                                 discounting.
+
+    Returns:
+        tuple[PolicyTestingResult, PolicyTestingResult]: A tuple containing the testing
+        results for both policies. Each `PolicyTestingResult` includes the number of games
+        played, the total score, and the proportions of wins, draws, and losses.
+
+    Each game result contributes to the scores and counts of wins, losses, and draws for
+    both policies. The total score for a policy is adjusted by +1 for a win, -1 for a loss,
+    and 0 for a draw. These metrics provide insights into the effectiveness and robustness
+    of the evaluated policies under the simulation conditions set by the `deck` and the
+    `gamma` factor.
+
+    Note:
+        - A positive score indicates a policy that tends to win more than lose, while a
+          negative score indicates the opposite.
+        - This function assumes that the policies are deterministic and does not account
+          for stochastic effects in policy decisions. However, randomness in the deck
+          shuffling and card drawing can still introduce variability in the game outcomes.
+    """
     wins1, losses1, draws1, score1, games_no1 = 0, 0, 0, 0, 0
     wins2, losses2, draws2, score2, games_no2 = 0, 0, 0, 0, 0
 
@@ -543,26 +574,64 @@ GainsDict = dict[State, tuple[list[float], list[float]]]
 
 
 def create_gains_dict(experience: Experience) -> GainsDict:
-    """Create gains dict from the given experience."""
+    """
+    Create a dictionary mapping from game states to the gains associated with each possible action in those states, based on the given experiences.
+
+    Each state in the game is represented by a tuple of three elements: the player's total card value, a boolean indicating whether the player has a usable ace, and the opponent's (or dealer's) visible card value. The gains dictionary maps these states to pairs of lists: one for the gains associated with choosing to HIT, and one for choosing to HOLD.
+
+    The gains for each action are aggregated from the experiences collected during gameplay. An experience is a tuple consisting of a state, an action taken in that state (either HIT or HOLD), and the gain resulting from that action. The gain represents the immediate outcome or reward of taking the action, considering the future states until the end of the game.
+
+    Interpretation of the Gains Dictionary:
+    - Each key in the dictionary is a state, and the value is a pair of lists: the first list contains gains for HITTING, and the second list for HOLDING.
+    - A negative gain value indicates that, on average, the action led to a decrease in the player's chance of winning from that state.
+    - An empty list for an action means no experiences were recorded for that action in the given state, making its outcome unknown.
+
+    Example:
+    `GAINS DICT: {(15, True, 4): ([-0.81], []), (20, True, 4): ([-0.9], [])}`
+
+    This example means:
+    - For the state `(15, True, 4)`, the gain for choosing to HIT is `-0.81`, indicating an average negative outcome for this action. There's no data for choosing to HOLD, implying the outcome for this action is unknown in this state.
+    - For the state `(20, True, 4)`, the gain for HITTING is `-0.9`, similarly indicating a negative outcome on average for this action. As with the previous state, there's no information about the outcome of HOLDING.
+
+    Parameters:
+    - experience (Experience): A list of tuples, where each tuple contains a state, an action, and a gain.
+
+    Returns:
+    - GainsDict: A dictionary where keys are states and values are tuples of two lists: the first list contains gains from HITTING in that state, and the second list contains gains from HOLDING.
+    """
     gains_dict = dict()
-    for s, a, g in experience:
-        action_gains = gains_dict.get(s, ([], []))
-        action_gains[a.value].append(g)
-        gains_dict[s] = action_gains
+    for state, action, gain in experience:
+        action_gains = gains_dict.get(state, ([], []))
+        action_gains[action.value].append(gain)
+        gains_dict[state] = action_gains
     return gains_dict
 
 
 # Incremental Monte Karlo
 def update_q_value(current: float, target: float, alpha: float) -> float:
-    """Update the given current estimate given the new target.
+    """
+    Update the given current Q-value estimate with a new target value using the incremental Monte Carlo update formula. This function applies the concept of temporal difference learning, specifically for updating action-value (Q-value) estimates in reinforcement learning.
+
+    The formula for updating the Q-value is as follows:
+    Q_new = Q_current + alpha * (target - Q_current)
+
+    Where:
+    - Q_current is the current estimate of the Q-value for a given state-action pair.
+    - target is the observed return (or gain) from following the policy from the current state-action onward.
+    - alpha is the learning rate, a parameter that determines the extent to which the newly acquired information overrides the old information. A value of 0 makes the agent not learn anything, while a value of 1 would make the agent consider only the most recent information.
+
+    The update rule is a way to move the current Q-value estimate closer to the target value, with the learning rate controlling the size of the update step. This method is called incremental because it updates the estimates based on individual experiences or steps, rather than waiting for the completion of an entire episode.
 
     Args:
-        current (float): existing estimate
-        target (float): the given target
-        alpha (float): learning rate
+        current (float): The existing estimate of the Q-value for a certain state-action pair.
+        target (float): The observed return or gain for taking an action in a given state and following the current policy thereafter.
+        alpha (float): The learning rate, a value between 0 and 1 that controls how much the new information affects the current Q-value estimate.
 
-    Return:
-        float: the new, updated estimate
+    Returns:
+        float: The updated Q-value estimate for the state-action pair.
+
+    Note:
+    - If either the current Q-value or the target value is `None`, the function returns the non-None value, assuming a default initialization in such cases. If both are `None`, the function returns `None`, indicating an error or unhandled case.
     """
     if current is not None and target is not None:
         return current + alpha * (target - current)
@@ -597,7 +666,47 @@ def create_greedy_policy(q_dict: QDict) -> Policy:
 
 
 def update_Q(q_dict: QDict, experience: Experience, alpha=0.1):
-    """Update Q-function based on the given experience."""
+    """
+    Update the Q-value estimates for all state-action pairs encountered in a set of experiences.
+    This function calculates the average gain (or return) from each state-action pair in the
+    experience and updates the corresponding Q-value in the Q-dictionary using the incremental
+    Monte Carlo update rule.
+
+    The function operates in several steps:
+    1. Convert the list of experiences into a gains dictionary that maps each state to the
+    gains associated with HIT and HOLD actions.
+    2. For each state in the gains dictionary, calculate the average gain for HIT and HOLD actions.
+    3. Retrieve the current Q-values for HIT and HOLD actions for each state from the Q-dictionary.
+    4. Update the Q-values based on the average gains using the formula:
+    Q_new = Q_current + alpha * (gain - Q_current),
+    where gain is the average gain from the experience for a given action, and alpha is the
+    learning rate.
+    5. Update the Q-dictionary with the new Q-values.
+
+    Args:
+        q_dict (QDict): A dictionary where keys are state tuples and values are tuples of
+                        Q-values for HIT and HOLD actions, respectively. Each key-value pair
+                        represents the Q-value estimates before updating.
+        experience (Experience): A list of tuples, each containing a state, an action taken
+                                in that state, and the gain (or return) obtained. The experience
+                                represents the outcomes of actions taken in specific states
+                                during gameplay.
+        alpha (float): The learning rate, a parameter that determines the rate at which new
+                    information is incorporated into the Q-value estimates. It ranges from
+                    0 to 1, with higher values allowing faster learning at the risk of
+                    instability.
+
+    Returns:
+        QDict: The updated Q-dictionary with revised Q-value estimates based on the provided
+            experiences.
+
+    Note:
+        - This function assumes that gains for actions not taken in a given state are represented
+        by an empty list in the gains dictionary, and it handles such cases by not updating
+        the Q-value for those actions.
+        - If the experience does not contain any instances of a state-action pair, the corresponding
+        Q-value remains unchanged.
+    """
     gains_dict = create_gains_dict(experience)
 
     for s, (gains_HIT, gains_HOLD) in gains_dict.items():
@@ -666,7 +775,40 @@ def visualize_policy(policy):
     plt.show()
 
 
-def pre_train_players(deck, num_games, alpha=0.1, gamma=0.9):
+def pre_train_players(
+    deck: CardDeck, num_games: int, alpha: float = 0.1, gamma: float = 0.9
+):
+    """
+    Pre-trains two players against a fixed dealer policy over a specified number of games to
+    initialize or improve their Q-value dictionaries.
+
+    Args:
+        deck (CardDeck): An instance of the CardDeck class, which provides a deck of cards
+                         for the game simulations.
+        num_games (int): The number of games to play for pre-training. Each game contributes
+                         to the update of the Q-value dictionaries for both players.
+        alpha (float): The learning rate used in the Q-value update formula. It determines
+                       how new information affects the existing Q-values. Defaults to 0.1.
+        gamma (float): The discount factor used in calculating the future reward. It
+                       represents the importance of future rewards. Defaults to 0.9.
+
+    Returns:
+        Tuple[Dict, Dict]: A tuple containing two dictionaries. Each dictionary maps state-action
+                           pairs to Q-values for one of the two players. These dictionaries
+                           represent the learned strategies based on the pre-training.
+
+    The function iterates through the specified number of games, during which it:
+    1. Utilizes the current Q-dictionary to create a greedy policy for each player.
+    2. Simulates a game between the player (using the greedy policy) and the dealer (using a
+       fixed policy).
+    3. Updates the player's Q-dictionary based on the outcomes of the game using the Q-learning
+       update rule.
+
+    This pre-training process aims to give the players an initial strategy before they compete
+    against each other or undergo further training. It's an essential step in preparing the
+    agents for more complex interactions or for refining their strategies with additional
+    training sessions.
+    """
     q_dict_player1 = dict()
     q_dict_player2 = dict()
 
@@ -739,7 +881,7 @@ def main(debug: bool = False, pretrain: bool = True):
     res_best_player1 = -float("inf")
     res_best_player2 = -float("inf")
 
-    for _ in trange(100000):
+    for _ in trange(10000):
         # Create greedy policies for both players
         policy_player1 = create_greedy_policy(q_dict_player1)
         policy_player2 = create_greedy_policy(q_dict_player2)
