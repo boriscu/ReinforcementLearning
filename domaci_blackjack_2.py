@@ -442,6 +442,7 @@ def play_game(
     player1_report_callback: ReportCallback | None = None,
     player2_report_callback: ReportCallback | None = None,
     debug: bool = False,
+    player1_starts: bool = True,
 ) -> tuple[int, list, list]:
     """
     Simulate a two-player game with specified policies for each player and a card deck.
@@ -470,15 +471,24 @@ def play_game(
     # Initialize states for both players
     player1_state, player2_state = get_init_states(deck, debug)
 
-    # Player 1 takes their turn
-    player1_total, player1_log = play_turn(
-        policy1, deck, player1_state, report_callback=player1_report_callback
-    )
-
-    # Player 2 takes their turn
-    player2_total, player2_log = play_turn(
-        policy2, deck, player2_state, report_callback=player2_report_callback
-    )
+    if player1_starts:
+        # Player 1 takes their turn first
+        player1_total, player1_log = play_turn(
+            policy1, deck, player1_state, report_callback=player1_report_callback
+        )
+        # Then Player 2 takes their turn
+        player2_total, player2_log = play_turn(
+            policy2, deck, player2_state, report_callback=player2_report_callback
+        )
+    else:
+        # Player 2 takes their turn first if player1_starts is False
+        player2_total, player2_log = play_turn(
+            policy2, deck, player2_state, report_callback=player2_report_callback
+        )
+        # Then Player 1 takes their turn
+        player1_total, player1_log = play_turn(
+            policy1, deck, player1_state, report_callback=player1_report_callback
+        )
 
     game_result = compare_totals(player1_total, player2_total)
     report(f"Game result: {game_result}")
@@ -513,8 +523,14 @@ def apply_policy_exhaustive(
     wins1, losses1, draws1, score1, games_no1 = 0, 0, 0, 0, 0
     wins2, losses2, draws2, score2, games_no2 = 0, 0, 0, 0, 0
 
-    for _ in range(epoch_no):
-        res, exp_player1, exp_player2 = play_game(policy1, policy2, deck, gamma=gamma)
+    for epoch in range(epoch_no):
+        player1_starts = (
+            epoch % 2 == 0
+        )  # Player 1 starts on even epochs, Player 2 on odd epochs
+
+        res, exp_player1, exp_player2 = play_game(
+            policy1, policy2, deck, gamma=gamma, player1_starts=player1_starts
+        )
 
         # Update scores and counts for Player 1
         games_no1 += 1
@@ -725,17 +741,30 @@ def pre_train_players(deck, num_games, alpha=0.1, gamma=0.9, method: str = "qlea
     q_dict_player1 = dict()
     q_dict_player2 = dict()
 
-    for _ in trange(num_games, desc="Pretraining"):
+    for game_no in trange(num_games, desc="Pretraining"):
+        player1_starts = game_no % 2 == 0
         # Training Player 1 against Dealer
         policy_player1 = create_greedy_policy(q_dict_player1)
-        _, exp_player1, _ = play_game(policy_player1, dealer_policy, deck, gamma=gamma)
+        _, exp_player1, _ = play_game(
+            policy_player1,
+            dealer_policy,
+            deck,
+            gamma=gamma,
+            player1_starts=player1_starts,
+        )
         q_dict_player1 = update_Q(
             q_dict_player1, exp_player1, alpha=alpha, method=method
         )
 
         # Training Player 2 against Dealer
         policy_player2 = create_greedy_policy(q_dict_player2)
-        _, exp_player2, _ = play_game(policy_player2, dealer_policy, deck, gamma=gamma)
+        _, exp_player2, _ = play_game(
+            policy_player2,
+            dealer_policy,
+            deck,
+            gamma=gamma,
+            player1_starts=player1_starts,
+        )
         q_dict_player2 = update_Q(
             q_dict_player2, exp_player2, alpha=alpha, method=method
         )
@@ -743,7 +772,13 @@ def pre_train_players(deck, num_games, alpha=0.1, gamma=0.9, method: str = "qlea
     return q_dict_player1, q_dict_player2
 
 
-def main(debug: bool = False, pretrain: bool = True, method: str = "qlearning"):
+def main(
+    debug: bool = False,
+    pretrain: bool = True,
+    method: str = "qlearning",
+    epochs: int = 10000,
+    epochs_pretrain: int = 50000,
+):
     deck = CardDeck()
 
     if debug:
@@ -787,7 +822,7 @@ def main(debug: bool = False, pretrain: bool = True, method: str = "qlearning"):
 
     if pretrain:
         q_dict_player1, q_dict_player2 = pre_train_players(
-            deck, num_games=50000, method=method
+            deck, num_games=epochs_pretrain, method=method
         )
         pretrained_policy_player1 = create_greedy_policy(q_dict_best_player1)
         pretrained_policy_player2 = create_greedy_policy(q_dict_best_player2)
@@ -800,14 +835,19 @@ def main(debug: bool = False, pretrain: bool = True, method: str = "qlearning"):
     res_best_player1 = -float("inf")
     res_best_player2 = -float("inf")
 
-    for _ in trange(100000):
+    for epoch in trange(epochs):
+        player_1_starts = epoch % 2 == 0
         # Create greedy policies for both players
         policy_player1 = create_greedy_policy(q_dict_player1)
         policy_player2 = create_greedy_policy(q_dict_player2)
 
         # Play games and update policies
         _, exp_player1, exp_player2 = play_game(
-            policy_player1, policy_player2, deck, gamma=0.9
+            policy_player1,
+            policy_player2,
+            deck,
+            gamma=0.9,
+            player1_starts=player_1_starts,
         )
         q_dict_player1 = update_Q(q_dict_player1, exp_player1, alpha=0.1, method=method)
         q_dict_player2 = update_Q(q_dict_player2, exp_player2, alpha=0.1, method=method)
@@ -851,4 +891,6 @@ def main(debug: bool = False, pretrain: bool = True, method: str = "qlearning"):
 
 
 if __name__ == "__main__":
-    main(debug=False, pretrain=True, method="sarsa")
+    main(
+        debug=False, pretrain=True, method="sarsa", epochs=100000, epochs_pretrain=50000
+    )

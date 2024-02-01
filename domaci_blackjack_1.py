@@ -1002,4 +1002,4 @@ def main(
 
 # Execute the main function
 if __name__ == "__main__":
-    main(debug=False, pretrain=True)
+    main(debug=False, pretrain=True, epochs=100000, epochs_pretrain=50000)
