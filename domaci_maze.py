@@ -265,11 +265,12 @@ class MazeEnvironment:
         total_cells = self.graph_width * self.graph_height
         zero_cells = min(len(nodes_list), total_cells // 2)
 
-        # Assign zero probability to a subset of non-wall nodes
-        for _ in range(zero_cells):
-            random_node = rdm.choice(nodes_list)
-            nodes_list.remove(random_node)
-            probabilities.append([0, random_node, 0])
+        # Assign zero probability to a subset of non-wall nodes that are not teleport nodes
+        if not isinstance(node, TeleportNode):
+            for _ in range(zero_cells):
+                random_node = rdm.choice(nodes_list)
+                nodes_list.remove(random_node)
+                probabilities.append([0, random_node, 0])
 
         # Distribute the remaining nodes among the actions
         for action in ACTIONS:
@@ -527,9 +528,7 @@ def plot_maze_graph(env: MazeEnvironment):
     graph = env.get_graph()
     edge_labels = {}
     pos = {}  # Dictionary to hold positions
-    offset = 0.03  # Adjust this value to move the label position
-    edge_colors = []
-
+    offset = 0.01  # Adjust this value to move the label position
     action_colors = {
         1: "magenta",
         2: "orange",
@@ -537,36 +536,59 @@ def plot_maze_graph(env: MazeEnvironment):
         # Add more colors if needed
     }
 
+    teleport_edges = []  # List to hold edges from TeleportNode
+    normal_edges = []  # List to hold other edges
+
     for node in graph:
         position = node.get_position()
-        pos[node] = position  # Ensure every node has a position in pos dictionary
+        pos[node] = position
         g.add_node(node, pos=position)
 
-        if not isinstance(node, WallNode):  # Skip adding edges for wall nodes
+        if not isinstance(node, WallNode):
             for action, next_node, probability in graph[node]:
                 if (
                     action != 0
                     and probability != 0
                     and not isinstance(next_node, WallNode)
                 ):
-                    g.add_edge(node, next_node)
-                    edge_colors.append(
-                        action_colors.get(action, "black")
-                    )  # Default to black if action not in mapping
+                    edge_color = action_colors.get(action, "black")
+                    if isinstance(node, TeleportNode):
+                        teleport_edges.append((node, next_node, edge_color))
+                    else:
+                        normal_edges.append((node, next_node, edge_color))
                     edge_labels[(node, next_node)] = f"{next_node.get_reward()}"
 
-    node_colors = {
-        node: get_node_color(node) for node in g.nodes()
-    }  # Get colors for nodes in g
-    node_color_list = [
-        node_colors[node] for node in g.nodes()
-    ]  # Create color list based on nodes in g
-
+    # Draw nodes
+    node_colors = {node: get_node_color(node) for node in g.nodes()}
+    node_color_list = [node_colors[node] for node in g.nodes()]
     plt.figure(figsize=(10, 7))
     nx.draw_networkx_nodes(g, pos, node_color=node_color_list, node_size=700)
-    nx.draw_networkx_edges(
-        g, pos, edge_color=edge_colors, arrowstyle="->", arrowsize=30
-    )
+
+    # Draw normal edges
+    for source, target, color in normal_edges:
+        nx.draw_networkx_edges(
+            g,
+            pos,
+            edgelist=[(source, target)],
+            edge_color=color,
+            arrowstyle="->",
+            arrowsize=30,
+            connectionstyle="arc3,rad=0.2",
+        )
+
+    # Draw teleport edges with special styling
+    for source, target, color in teleport_edges:
+        nx.draw_networkx_edges(
+            g,
+            pos,
+            edgelist=[(source, target)],
+            edge_color=color,
+            style="dashed",
+            alpha=0.5,
+            arrowstyle="->",
+            arrowsize=30,
+            connectionstyle="arc3,rad=0.2",
+        )
 
     node_labels = {node: f"{pos[node]}" for node in g.nodes()}
     nx.draw_networkx_labels(g, pos, labels=node_labels, font_color="white")
