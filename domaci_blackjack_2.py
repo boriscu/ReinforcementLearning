@@ -405,21 +405,6 @@ def compute_gain(rewards: list[float], gamma: float) -> float:
     return g
 
 
-def discounted_gains(rewards: list[float], gamma) -> list[float]:
-    """
-    Compute list of discounted gains, given a sequence of rewards.
-
-    Args:
-        rewards (list[float]): Sequence of rewards.
-        gamma: discount factor
-
-    Return:
-        list[float]: sequence of gains
-    """
-    gains = [compute_gain(rewards[i:], gamma) for i in range(len(rewards))]
-    return gains
-
-
 def build_experience(
     player_log: TurnLog, opponent_log: TurnLog, result: int, gamma: float
 ) -> Experience:
@@ -621,17 +606,44 @@ def update_Q(
     q_dict: QDict, experience: Experience, alpha=0.1, gamma=0.9, method="qlearning"
 ):
     """
-    Update Q-function based on the given experience using SARSA or Q-Learning.
+    Update the Q-function based on the given experience using either the SARSA or Q-Learning
+    algorithm. This function iterates over a list of experiences, updating the Q-values
+    for the actions taken in those experiences according to the chosen method.
+
+    Q-Learning Update Formula:
+    Q(s, a) = Q(s, a) + alpha * (reward + gamma * max(Q(s', a')) - Q(s, a))
+    Where:
+    - Q(s, a) is the current Q-value of state-action pair (s, a).
+    - reward is the reward received after executing action a in state s.
+    - gamma is the discount factor, weighing the importance of future rewards.
+    - max(Q(s', a')) is the maximum Q-value for the next state s' across all possible actions a'.
+    - alpha is the learning rate, determining the impact of the new information.
+
+    SARSA Update Formula:
+    Q(s, a) = Q(s, a) + alpha * (reward + gamma * Q(s', a') - Q(s, a))
+    Where:
+    - Q(s', a') is the Q-value of the action a' taken in the next state s'.
+    - Other variables retain their meaning as described in the Q-Learning formula.
 
     Args:
-        q_dict (QDict): Dictionary containing Q-values.
-        experience (Experience): List of experiences (state, action, reward, next_state, next_action).
-        alpha (float): Learning rate.
-        gamma (float): Discount factor.
-        method (str): Learning method ('sarsa' or 'qlearning').
+        q_dict (QDict): A dictionary mapping state-action pairs to Q-values.
+        experience (Experience): A list of tuples containing the experiences to be processed.
+                                 Each tuple consists of (state, action, reward, next_state, next_action).
+        alpha (float): The learning rate, a factor that determines how much the newly acquired
+                       information will override the old information.
+        gamma (float): The discount factor, used to balance the importance of immediate and future rewards.
+        method (str): Specifies the learning method to use for updating Q-values. It can be
+                      either 'sarsa' for the SARSA algorithm or 'qlearning' for Q-Learning.
 
-    Return:
-        QDict: Updated Q-values dictionary.
+    Returns:
+        QDict: The updated Q-values dictionary after processing all experiences.
+
+    Note:
+        - This function updates the Q-values in-place within the passed `q_dict`.
+        - The choice between SARSA and Q-Learning affects how future rewards are estimated and
+          incorporated into the current Q-value estimates. SARSA considers the actual next action
+          (a'), leading to a more conservative approach compared to Q-Learning, which optimistically
+          estimates future rewards based on the maximum possible Q-value for the next state (s').
     """
     for state, action, reward, next_state, next_action in experience:
         old_value = q_dict.get(state, (0, 0))[action.value]
@@ -695,7 +707,7 @@ def visualize_policy(policy):
     plt.xticks(np.arange(2.5, 21.5, 1), np.arange(2, 21, 1))
     plt.yticks(np.arange(2.5, 12.5, 1), np.arange(2, 12, 1))
     plt.xlabel("player total")
-    plt.ylabel("dealer total")
+    plt.ylabel("oponent total")
 
     # Create patches for the legend
     red_patch = mpatches.Patch(color="red", label="HIT (with or without ACE)")

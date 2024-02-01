@@ -396,14 +396,42 @@ def compute_gain(rewards: list[float], gamma: float) -> float:
 
 def discounted_gains(rewards: list[float], gamma) -> list[float]:
     """
-    Compute list of discounted gains, given a sequence of rewards.
+    Calculate the discounted gains (or returns) for each timestep in a sequence of rewards
+    using a discount factor. The discount factor, gamma, is used to weigh rewards received
+    in the future less than rewards received immediately, reflecting the principle that
+    immediate rewards are more valuable than the same rewards received in the future.
+
+    This function computes the discounted gain for each timestep in the sequence by
+    summing all future rewards from that timestep, each discounted by how far in the
+    future it is received. The gain at each timestep is calculated as:
+
+    G_t = R_t+1 + gamma * R_t+2 + gamma^2 * R_t+3 + ... + gamma^(T-t-1) * R_T
+
+    where G_t is the gain at time t, R_t is the reward received at time t, gamma is the
+    discount factor (0 <= gamma <= 1), and T is the total number of timesteps.
 
     Args:
-        rewards (list[float]): Sequence of rewards.
-        gamma: discount factor
+        rewards (list[float]): A sequence of rewards received over time, where each element
+                               in the list represents the reward received at a particular timestep.
+        gamma (float): The discount factor used to devalue future rewards relative to immediate
+                       rewards. A gamma of 0 means "only value immediate rewards," while a
+                       gamma of 1 means "value future rewards just as much as immediate rewards."
 
-    Return:
-        list[float]: sequence of gains
+    Returns:
+        list[float]: A list of discounted gains, where each element corresponds to the discounted
+                     gain calculated from a particular timestep in the sequence of rewards.
+
+    Example:
+        If rewards = [1, 2, 3, 4] and gamma = 0.5, the function will calculate the discounted
+        gain for each timestep, resulting in a list of gains, each calculated using the formula
+        provided above.
+
+    Note:
+        - The length of the returned list of gains will be the same as the length of the input
+          list of rewards.
+        - This function is particularly useful in the context of reinforcement learning for
+          calculating the expected returns from taking certain actions in specific states,
+          taking into account the diminishing value of future rewards.
     """
     gains = [compute_gain(rewards[i:], gamma) for i in range(len(rewards))]
     return gains
@@ -761,7 +789,7 @@ def visualize_policy(policy):
     plt.xticks(np.arange(2.5, 21.5, 1), np.arange(2, 21, 1))
     plt.yticks(np.arange(2.5, 12.5, 1), np.arange(2, 12, 1))
     plt.xlabel("player total")
-    plt.ylabel("dealer total")
+    plt.ylabel("oponent total")
 
     # Create patches for the legend
     red_patch = mpatches.Patch(color="red", label="HIT (with or without ACE)")
