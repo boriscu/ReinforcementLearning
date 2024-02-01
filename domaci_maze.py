@@ -568,6 +568,9 @@ def plot_maze_graph(env: MazeEnvironment):
         g, pos, edge_color=edge_colors, arrowstyle="->", arrowsize=30
     )
 
+    node_labels = {node: f"{pos[node]}" for node in g.nodes()}
+    nx.draw_networkx_labels(g, pos, labels=node_labels, font_color="white")
+
     # Adjusting label positions for edge labels
     edge_labels_pos = {
         edge: [
