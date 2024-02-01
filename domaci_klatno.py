@@ -117,7 +117,10 @@ class InvertedPendulumEnv:
         g: float = 9.81,
         k: float = 0.0,
         T: float = 0.1,
-        epsilon: float = 0.1,
+        epsilon: float = 0.5,
+        epsilon_min: float = 0.01,
+        epsilon_decay: float = 0.95,
+        enable_epsilon_decay: bool = False,
         alpha: float = 0.1,
         gamma: float = 0.9,
         resolution: int = 10,
@@ -126,19 +129,22 @@ class InvertedPendulumEnv:
         Initialize the simulation environment for the inverted pendulum.
 
         Args:
-        max_force (float): Maximum magnitude of force that can be applied.
-        time_limit (int): The maximum number of time steps in an episode.
-        m (float): The mass of the pendulum.
-        M (float): The mass of the cart.
-        l (float): The length of the pendulum.
-        cart_boundary (float): The boundary for the cart's position
-        g (float): The acceleration due to gravity (default is 9.81 m/s^2).
-        k (float): The damping factor (default is 0.0, no damping).
-        T (float) : Fixed duration of each step (default is 0.1s)
-        resolution (int): Number of possible actions to take.
-        epsilon (float): The exploration rate for the ε-greedy policy.
-        alpha (float): The learning rate.
-        gamma (float): The discount factor.
+            max_force (float): Maximum magnitude of force that can be applied.
+            time_limit (int): The maximum number of time steps in an episode.
+            m (float): The mass of the pendulum.
+            M (float): The mass of the cart.
+            l (float): The length of the pendulum.
+            cart_boundary (float): The boundary for the cart's position.
+            g (float): The acceleration due to gravity. Default is 9.81 m/s^2.
+            k (float): The damping factor. Default is 0.0 (no damping).
+            T (float): Fixed duration of each step. Default is 0.1 seconds.
+            epsilon (float): Starting value for epsilon in the epsilon-greedy policy. Default is 0.5.
+            epsilon_min (float): Minimum value to which epsilon can decay. Default is 0.01.
+            epsilon_decay (float): Factor by which epsilon is decayed each episode. Default is 0.95.
+            enable_epsilon_decay (bool): Flag to enable or disable epsilon decay. Default is False.
+            alpha (float): The learning rate.
+            gamma (float): The discount factor.
+            resolution (int): Number of possible actions to take.
         """
         self.max_force = max_force
         self.time_limit = time_limit
@@ -153,6 +159,9 @@ class InvertedPendulumEnv:
         # Calculate the number of discretization bins for each state component
         self.num_actions = resolution
         self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.enable_epsilon_decay = enable_epsilon_decay
         self.alpha = alpha
         self.gamma = gamma
 
@@ -211,21 +220,26 @@ class InvertedPendulumEnv:
         Calculate the reward based on the current state.
 
         Args:
-        state (Tuple[float, float, float, float]): The current state of the system.
+            state (Tuple[float, float, float, float]): The current state of the system.
 
         Returns:
-        float: The calculated reward.
+            float: The calculated reward.
         """
         x, _, theta, _ = state
-        error = abs(theta - np.pi)
+        theta_error = abs(theta - np.pi)
+        distance_from_center = abs(x)
 
-        reward = -np.exp(error)  # Penalize based on angle error
+        angle_penalty = -(theta_error**2)
 
-        # Penalize for going out of bounds or pendulum falling
-        if abs(x) > self.cart_boundary or abs(theta - np.pi) > np.pi / 2:
-            reward -= 1000
-        else:
-            reward += 1  # Small positive reward for staying within bounds and upright
+        distance_penalty = -distance_from_center
+
+        # Combine penalties with a focus on angle error
+        reward = angle_penalty + distance_penalty
+
+        if abs(x) > self.cart_boundary or theta_error > np.pi / 2:
+            reward -= 100  # Penalty for critical failures
+
+        reward += 0.1  # Reward for each time step the pendulum is not falling and within bounds
 
         return reward
 
@@ -282,6 +296,10 @@ class InvertedPendulumEnv:
             )
             return max_action
 
+    def update_epsilon(self):
+        if self.enable_epsilon_decay:
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
     def update_q_values(
         self,
         state: Tuple[float, float, float, float],
@@ -337,6 +355,8 @@ def train_sarsa(env: InvertedPendulumEnv, num_episodes: int):
 
             state, action = next_state, next_action
 
+        env.update_epsilon()
+
 
 def animate_system(env: InvertedPendulumEnv, policy):
     """
@@ -368,11 +388,14 @@ def animate_system(env: InvertedPendulumEnv, policy):
         -env.cart_boundary - 0.9, 1.8, "", fontsize=9, verticalalignment="bottom"
     )
 
+    time_text = ax.text(env.cart_boundary, 1.8, "", fontsize=9, verticalalignment="top")
+
     def init():
         cart.set_xy((-cart_width / 2, cart_y - cart_height / 2))
         pendulum.set_data([], [])
         info_text.set_text("")
-        return cart, pendulum, left_boundary, right_boundary, info_text
+        time_text.set_text("")
+        return cart, pendulum, left_boundary, right_boundary, info_text, time_text
 
     def update(frame):
         if env.time_step >= env.time_limit or env.check_termination(env.state):
@@ -394,19 +417,32 @@ def animate_system(env: InvertedPendulumEnv, policy):
         pendulum.set_data(pendulum_x, pendulum_y)
 
         # Update information text
-        info = f"Cart Position: {x:.2f}\nCart Velocity: {x_dot:.2f}\nPendulum Angle: {theta:.2f}\nPendulum Angular Velocity: {theta_dot:.2f}\nAction(Force): {action:.2f}"
+        info = f"Cart Position: {x:.1f}\nCart Velocity: {x_dot:.2f}\nPendulum Angle: {theta:.2f}\nPendulum Angular Velocity: {theta_dot:.2f}\nAction(Force): {action:.2f}"
         info_text.set_text(info)
 
-        return cart, pendulum, left_boundary, right_boundary, info_text
+        # Update time elapsed
+        time_elapsed = env.time_step * env.T
+        time_text.set_text(f"Time: {time_elapsed:.2f}s")
+
+        return cart, pendulum, left_boundary, right_boundary, info_text, time_text
 
     ani = FuncAnimation(fig, update, frames=env.time_limit, init_func=init, blit=True)
     plt.show()
 
 
 env = InvertedPendulumEnv(
-    max_force=10, time_limit=200, m=1, M=5, l=2, epsilon=0.3, resolution=30
+    max_force=10,
+    time_limit=200,
+    m=0.1,
+    M=10,
+    l=0.5,
+    epsilon=0.5,
+    resolution=35,
+    enable_epsilon_decay=True,
+    epsilon_decay=0.95,
+    epsilon_min=0.01,
 )
-train_sarsa(env, num_episodes=10000)
+train_sarsa(env, num_episodes=20000)
 optimal_policy = env.policy
 env.reset()
 animate_system(env, policy=optimal_policy)
